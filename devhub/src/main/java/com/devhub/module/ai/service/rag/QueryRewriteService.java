@@ -15,7 +15,8 @@ import java.util.List;
  * Query 改写服务（对标 Dify Query Rewrite / LangChain MultiQueryRetriever）
  * <p>
  * 一次 LLM 调用同时产出：规范化问题（纠错/去口语/指代消解）+ 检索变体 + 英文翻译。
- * 改写目标是提升检索命中率而非可读性。Redis 缓存 1 小时，失败降级为原查询。
+ * 改写目标是提升检索命中率而非可读性。Redis 缓存 1 小时（getOrLoad 读穿：
+ * 并发同问只放一个 LLM 调用，改写失败写短 TTL 空值占位防反复冲击模型），失败降级为原查询。
  */
 @Slf4j
 @Service
@@ -83,26 +84,15 @@ public class QueryRewriteService {
 
         String cacheKey = CACHE_KEY_PREFIX + md5(query + "|" + (history == null ? "" : history));
         try {
-            var cached = cacheService.get(cacheKey, CachedRewrites.class);
-            if (cached.isPresent()) {
-                log.debug("改写缓存命中: query={}", query);
-                return cached.get().toRewrites();
+            CachedRewrites parsed = cacheService.getOrLoad(cacheKey, CachedRewrites.class,
+                    () -> callModel(query, history), CACHE_TTL).orElse(null);
+            if (parsed == null) {
+                return fallback(query);
             }
-        } catch (Exception e) {
-            log.warn("改写缓存读取失败: {}", e.getMessage());
-        }
-
-        try {
-            String historyBlock = (history == null || history.isBlank()) ? ""
-                    : "对话历史（供指代消解）：\n" + history + "\n";
-            String output = modelRouter.call(String.format(REWRITE_PROMPT, query, historyBlock), null).trim();
-            String json = output.replaceAll("(?s).*?(\\{.*}).*", "$1");
-            CachedRewrites parsed = JsonHolder.MAPPER.readValue(json, CachedRewrites.class);
             Rewrites result = parsed.toRewrites();
             if (result.normalized() == null || result.normalized().isBlank()) {
                 return fallback(query);
             }
-            cacheService.set(cacheKey, parsed, CACHE_TTL);
             log.info("查询改写完成: {} -> normalized={}, variants={}, english={}",
                     query, result.normalized(), result.variants().size(),
                     result.english() != null ? "yes" : "no");
@@ -110,6 +100,24 @@ public class QueryRewriteService {
         } catch (Exception e) {
             log.warn("查询改写失败，使用原查询: {}", e.getMessage());
             return fallback(query);
+        }
+    }
+
+    /**
+     * 单次 LLM 改写调用；失败或产出无效时返回 null，
+     * 由 getOrLoad 写入短 TTL 空值占位，避免同一失败问题反复冲击模型
+     */
+    private CachedRewrites callModel(String query, String history) {
+        try {
+            String historyBlock = (history == null || history.isBlank()) ? ""
+                    : "对话历史（供指代消解）：\n" + history + "\n";
+            String output = modelRouter.call(String.format(REWRITE_PROMPT, query, historyBlock), null).trim();
+            String json = output.replaceAll("(?s).*?(\\{.*}).*", "$1");
+            CachedRewrites parsed = JsonHolder.MAPPER.readValue(json, CachedRewrites.class);
+            return (parsed.normalized == null || parsed.normalized.isBlank()) ? null : parsed;
+        } catch (Exception e) {
+            log.warn("改写 LLM 调用失败: {}", e.getMessage());
+            return null;
         }
     }
 

@@ -83,13 +83,13 @@ public class SemanticAnswerCache {
             CachedAnswer entry = new CachedAnswer(scope, queryVector, question, answer, sourcesJson, model);
             String json = objectMapper.writeValueAsString(entry);
             cacheService.listRightPush(LIST_KEY, json);
-            cacheService.set(exactKey(scope, question), entry, TTL);
+            cacheService.set(exactKey(scope, question), entry, cacheService.jitter(TTL));
             long size = cacheService.listRange(LIST_KEY, 0, -1) == null
                     ? 0 : cacheService.listRange(LIST_KEY, 0, -1).size();
             if (size > MAX_ENTRIES) {
                 cacheService.listTrim(LIST_KEY, size - MAX_ENTRIES, -1);
             }
-            cacheService.expire(LIST_KEY, TTL);
+            cacheService.expire(LIST_KEY, cacheService.jitter(TTL));
         } catch (Exception e) {
             log.warn("语义缓存写入失败: {}", e.getMessage());
         }

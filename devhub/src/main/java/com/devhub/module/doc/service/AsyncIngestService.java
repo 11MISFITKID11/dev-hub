@@ -4,11 +4,13 @@ import com.devhub.module.ai.etl.ETLPipeline;
 import com.devhub.module.ai.mapper.DocumentMapper;
 import com.devhub.module.ai.model.dto.DocumentUploadResponse;
 import com.devhub.module.ai.model.entity.Document;
+import com.devhub.module.doc.config.DocIngestStreamConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.connection.RedisStreamCommands.XAddOptions;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,14 +21,19 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
- * 文档中心异步入库（方案 5.5：平移变融合的关键）
+ * 文档中心异步入库（Redis Stream 驱动，替代原 @Async 事件）
  * <p>
- * 上传接口立即返回：预插 PROCESSING 外壳行（带分类/上传人/部门）→ 发事件 →
- * 事件监听异步执行 Tika 解析 → 切片 → 向量化 → 更新行为 completed + chunk_count。
- * 列表页轮询即可看到「解析中 → 已生效（N 切片）」的状态流转。
+ * 上传接口立即返回：预插 PROCESSING 外壳行（带分类/上传人/部门）→
+ * XADD 到 devhub:stream:doc-ingest → 消费者组解析 → 切片 → 向量化 → 更新行为 completed。
+ * <p>
+ * 相比 @Async（进程内队列，重启即丢）：Stream 持久化在 Redis，应用重启后
+ * PENDING 消息被恢复任务认领重试，达到投递上限走死信清理，链路见
+ * {@link DocIngestStreamConsumer}。
  */
 @Slf4j
 @Service
@@ -35,12 +42,13 @@ public class AsyncIngestService {
 
     private final DocumentMapper documentMapper;
     private final ETLPipeline etlPipeline;
-    private final ApplicationEventPublisher eventPublisher;
+    private final StringRedisTemplate redisTemplate;
     private final JdbcTemplate jdbc;
 
-    /** 上传事件：临时文件路径（请求结束后 MultipartFile 即失效，先落盘再异步读） */
+    /** 入库任务：临时文件路径 + 重建外壳行所需元数据（临时文件在处理成功/死信前保留） */
     public record DocumentIngestEvent(String documentId, String fileName, String contentType,
-                                      Path tempFile, long fileSize) {}
+                                      Path tempFile, long fileSize, String uploader,
+                                      Long categoryId, Long deptId) {}
 
     /**
      * 提交异步解析（上传接口同步部分，毫秒级返回）
@@ -58,33 +66,33 @@ public class AsyncIngestService {
                     Long.class, uploader);
         } catch (Exception ignored) { }
 
-        // PROCESSING 外壳行（文档中心列表立即可见"解析中"）
-        Document shell = new Document();
-        shell.setId(documentId);
-        shell.setFileName(fileName);
-        shell.setFileType(extOf(fileName));
-        shell.setFileSize(file.getSize());
-        shell.setChunkCount(0);
-        shell.setStatus("processing");
-        shell.setLifeStatus("active");
-        shell.setSourceType("upload");
-        shell.setCategoryId(categoryId);
-        shell.setUploader(uploader);
-        shell.setAuditStatus("PENDING");
-        shell.setDeptId(deptId);
-        documentMapper.insert(shell);
+        insertShell(documentId, fileName, file.getSize(), uploader, categoryId, deptId);
 
-        // 字节落临时文件（异步线程读），发事件驱动 ETL
+        // 字节落临时文件，任务描述写入 Redis Stream（MAXLEN 限长防膨胀）
         try {
             String suffix = fileName != null && fileName.contains(".")
                     ? fileName.substring(fileName.lastIndexOf('.')) : ".tmp";
             Path temp = Files.createTempFile("devhub-ingest-", suffix);
             file.transferTo(temp.toFile());
-            eventPublisher.publishEvent(new DocumentIngestEvent(
-                    documentId, fileName, file.getContentType(), temp, file.getSize()));
+
+            Map<String, String> payload = new HashMap<>();
+            payload.put("documentId", documentId);
+            payload.put("fileName", fileName);
+            payload.put("contentType", file.getContentType());
+            payload.put("tempPath", temp.toAbsolutePath().toString());
+            payload.put("fileSize", String.valueOf(file.getSize()));
+            payload.put("uploader", uploader);
+            payload.put("categoryId", categoryId == null ? "" : String.valueOf(categoryId));
+            payload.put("deptId", deptId == null ? "" : String.valueOf(deptId));
+            redisTemplate.opsForStream().add(
+                    StreamRecords.newRecord().ofMap(payload)
+                            .withStreamKey(DocIngestStreamConfig.STREAM_KEY),
+                    XAddOptions.maxlen(DocIngestStreamConfig.MAX_STREAM_LEN)
+                            .approximateTrimming(true));
+            log.info("入库任务已入队: id={}, file={}", documentId, fileName);
         } catch (Exception e) {
-            // 落盘失败：外壳行标记失败并直接补偿删除（不留幽灵行）
-            log.error("上传暂存失败: {}", e.getMessage());
+            // 入队失败：外壳行标记失败并直接补偿删除（不留幽灵行）
+            log.error("入库任务入队失败: {}", e.getMessage());
             documentMapper.deleteById(documentId);
             throw new RuntimeException("上传暂存失败: " + e.getMessage(), e);
         }
@@ -97,28 +105,55 @@ public class AsyncIngestService {
                 .build();
     }
 
-    /** 事件监听：异步执行 ETL 管道（解析→切片→向量化→生命周期治理） */
-    @Async
-    @org.springframework.context.event.EventListener
-    public void onIngest(DocumentIngestEvent event) {
-        try {
-            etlPipeline.processText(event.documentId(), event.fileName(),
-                    parseText(event), "upload", "active", null, event.fileSize());
-            log.info("异步入库完成: id={}, file={}", event.documentId(), event.fileName());
-        } catch (Exception e) {
-            // 失败：ETL 内部补偿已删外壳行（无幽灵行），记录日志供排查
-            log.error("异步入库失败（外壳行已补偿清理）: id={}, file={}, cause={}",
-                    event.documentId(), event.fileName(), e.getMessage());
-        } finally {
-            try { Files.deleteIfExists(event.tempFile()); } catch (Exception ignored) { }
+    /**
+     * 消费端处理（由 Stream 消费者调用，可能重复投递）
+     * <p>
+     * 幂等依据：外壳行 completed = 已成功，直接跳过；行缺失 = 上次尝试失败被补偿清理，
+     * 重建外壳行后重跑（元数据从 Stream 消息还原，分类/上传人/部门不丢失）。
+     */
+    public void processIngest(DocumentIngestEvent event) {
+        Document doc = documentMapper.selectById(event.documentId());
+        if (doc != null && "completed".equals(doc.getStatus())) {
+            log.info("重复投递跳过（文档已完成入库）: id={}", event.documentId());
+            return;
         }
+        if (doc == null) {
+            insertShell(event.documentId(), event.fileName(), event.fileSize(),
+                    event.uploader(), event.categoryId(), event.deptId());
+        }
+        etlPipeline.processText(event.documentId(), event.fileName(),
+                parseText(event), "upload", "active", null, event.fileSize());
+        log.info("异步入库完成: id={}, file={}", event.documentId(), event.fileName());
     }
 
-    private String parseText(DocumentIngestEvent event) throws Exception {
-        Path temp = event.tempFile();
-        MultipartFile wrapper = new ByteArrayMultipartFile(
-                event.fileName(), event.contentType(), Files.readAllBytes(temp));
-        return new com.devhub.module.ai.etl.DocumentParser().parse(wrapper);
+    /** PROCESSING 外壳行（文档中心列表立即可见"解析中"） */
+    private void insertShell(String documentId, String fileName, long fileSize,
+                             String uploader, Long categoryId, Long deptId) {
+        Document shell = new Document();
+        shell.setId(documentId);
+        shell.setFileName(fileName);
+        shell.setFileType(extOf(fileName));
+        shell.setFileSize(fileSize);
+        shell.setChunkCount(0);
+        shell.setStatus("processing");
+        shell.setLifeStatus("active");
+        shell.setSourceType("upload");
+        shell.setCategoryId(categoryId);
+        shell.setUploader(uploader);
+        shell.setAuditStatus("PENDING");
+        shell.setDeptId(deptId);
+        documentMapper.insert(shell);
+    }
+
+    private String parseText(DocumentIngestEvent event) {
+        try {
+            Path temp = event.tempFile();
+            MultipartFile wrapper = new ByteArrayMultipartFile(
+                    event.fileName(), event.contentType(), Files.readAllBytes(temp));
+            return new com.devhub.module.ai.etl.DocumentParser().parse(wrapper);
+        } catch (Exception e) {
+            throw new RuntimeException("临时文件解析失败（可能已被清理）: " + e.getMessage(), e);
+        }
     }
 
     private String currentUsername() {

@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "created": "2026-10-15",
+    "description": "RAG 黄金评测集：问题 + 期望文档 + 期望关键词（关键词必须出现在命中的原文切片中）。miss 类问题预期知识库无法回答。",
+    "docs": [
+      "阿里巴巴Java开发手册(黄山版).pdf",
+      "Arthas诊断工具中文手册.md",
+      "COLA架构说明.md",
+      "SpringCloudAlibaba项目介绍.md"
+    ]
+  },
+  "cases": [
+    {"id": "jm-01", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "为什么阿里巴巴Java开发手册不允许使用Executors创建线程池？", "keywords": ["ThreadPoolExecutor", "Integer.MAX_VALUE"]},
+    {"id": "jm-02", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "POJO类属性为什么必须使用包装数据类型？RPC返回值用什么？", "keywords": ["POJO", "RPC"]},
+    {"id": "jm-03", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "SimpleDateFormat是线程安全的吗？怎么处理？", "keywords": ["SimpleDateFormat", "ThreadLocal"]},
+    {"id": "jm-04", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "遍历HashMap应该用keySet还是entrySet？", "keywords": ["entrySet", "keySet"]},
+    {"id": "jm-05", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "为什么不能在foreach循环里对元素进行remove或add操作？", "keywords": ["foreach", "Iterator"]},
+    {"id": "jm-06", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "subList返回的可以强转成ArrayList吗？", "keywords": ["subList", "ArrayList"]},
+    {"id": "jm-07", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "集合toArray使用不当会抛什么异常？怎么写才对？", "keywords": ["toArray", "ClassCastException"]},
+    {"id": "jm-08", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "使用Arrays.asList把数组转成集合后能直接修改吗？", "keywords": ["Arrays.asList"]},
+    {"id": "jm-09", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "BigDecimal比较相等为什么不能用equals？应该用什么？", "keywords": ["compareTo", "BigDecimal"]},
+    {"id": "jm-10", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "POJO类为什么要显式写serialVersionUID？", "keywords": ["serialVersionUID"]},
+    {"id": "jm-11", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "抽象类和异常类的命名有什么规约？", "keywords": ["Abstract", "Exception"]},
+    {"id": "jm-12", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "什么是魔法值？为什么不允许在代码中直接使用？", "keywords": ["魔法值"]},
+    {"id": "jm-13", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "三目运算符什么情况下会触发自动拆箱导致NPE？", "keywords": ["三目运算符", "拆箱"]},
+    {"id": "jm-14", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "异常处理为什么不允许使用e.printStackTrace()？", "keywords": ["printStackTrace"]},
+    {"id": "jm-15", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "finally块里可以return吗？为什么？", "keywords": ["finally"]},
+    {"id": "jm-16", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "手册认为防止什么异常是程序员的基本修养？远程调用返回值要注意什么？", "keywords": ["NPE"]},
+    {"id": "jm-17", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "MySQL表设计为什么不建议使用外键和级联？", "keywords": ["外键", "级联"]},
+    {"id": "jm-18", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "MySQL中判断字段为NULL推荐用什么写法？", "keywords": ["ISNULL"]},
+    {"id": "jm-19", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "金额字段在数据库中应该用什么类型？为什么不用float/double？", "keywords": ["decimal"]},
+    {"id": "jm-20", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "单元测试的AIR原则指什么？", "keywords": ["AIR"]},
+    {"id": "jm-21", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "应用分层架构中Manager层的作用是什么？", "keywords": ["Manager"]},
+    {"id": "jm-22", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "创建线程或线程池时为什么要指定有意义的线程名称？", "keywords": ["线程名称"]},
+    {"id": "jm-23", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "哪些方法必须写Javadoc注释？", "keywords": ["Javadoc"]},
+    {"id": "jm-24", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "并发场景下避免使用什么方法获取随机数？", "keywords": ["Math.random"]},
+    {"id": "jm-25", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "question": "接口过时的注解和注释怎么标记？枚举类的注释怎么写？", "keywords": ["@Deprecated"]},
+
+    {"id": "ar-01", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas的dashboard命令能看什么？", "keywords": ["dashboard"]},
+    {"id": "ar-02", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas怎么查找哪个线程持有锁导致了死锁？", "keywords": ["thread -b"]},
+    {"id": "ar-03", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas怎么反编译已加载类的字节码？", "keywords": ["jad"]},
+    {"id": "ar-04", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas watch命令怎么观察方法的返回值？", "keywords": ["watch", "returnObj"]},
+    {"id": "ar-05", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas哪个命令能定位方法内部每一步的耗时？", "keywords": ["trace"]},
+    {"id": "ar-06", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas的tt命令为什么叫时光隧道？能做什么？", "keywords": ["tt", "tunnel"]},
+    {"id": "ar-07", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas怎么生成火焰图分析性能？", "keywords": ["profiler", "火焰图"]},
+    {"id": "ar-08", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas怎么导出堆快照？", "keywords": ["heapdump"]},
+    {"id": "ar-09", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas里怎么执行OGNL表达式？", "keywords": ["ognl"]},
+    {"id": "ar-10", "doc": "Arthas诊断工具中文手册.md", "question": "sc -d命令能查看类的什么信息？", "keywords": ["sc -d"]},
+    {"id": "ar-11", "doc": "Arthas诊断工具中文手册.md", "question": "Arthas monitor命令统计哪些指标？", "keywords": ["monitor"]},
+    {"id": "ar-12", "doc": "Arthas诊断工具中文手册.md", "question": "stack命令输出什么？", "keywords": ["stack", "调用路径"]},
+
+    {"id": "co-01", "doc": "COLA架构说明.md", "question": "COLA架构和六边形、洋葱圈这些架构相比，独特之处是什么？", "keywords": ["可落地"]},
+    {"id": "co-02", "doc": "COLA架构说明.md", "question": "COLA提供了哪些可复用组件？", "keywords": ["cola-component"]},
+    {"id": "co-03", "doc": "COLA架构说明.md", "question": "怎么用COLA的archetype创建新项目？", "keywords": ["archetype"]},
+    {"id": "co-04", "doc": "COLA架构说明.md", "question": "COLA的全称是什么？", "keywords": ["Clean Object-Oriented"]},
+    {"id": "co-05", "doc": "COLA架构说明.md", "question": "COLA的dto组件是做什么用的？", "keywords": ["dto"]},
+
+    {"id": "sc-01", "doc": "SpringCloudAlibaba项目介绍.md", "question": "Spring Cloud Alibaba的服务注册和配置中心用什么组件？", "keywords": ["Nacos"]},
+    {"id": "sc-02", "doc": "SpringCloudAlibaba项目介绍.md", "question": "Spring Cloud Alibaba的限流熔断组件是什么？", "keywords": ["Sentinel"]},
+    {"id": "sc-03", "doc": "SpringCloudAlibaba项目介绍.md", "question": "Spring Cloud Alibaba的消息组件是什么？", "keywords": ["RocketMQ"]},
+    {"id": "sc-04", "doc": "SpringCloudAlibaba项目介绍.md", "question": "分布式事务用什么组件？", "keywords": ["Seata"]},
+    {"id": "sc-05", "doc": "SpringCloudAlibaba项目介绍.md", "question": "Spring Cloud Alibaba和Spring Boot版本怎么对应？", "keywords": ["Spring Boot"]},
+
+    {"id": "miss-01", "doc": null, "expectMiss": true, "question": "公司2026年国庆节放假安排是怎样的？", "keywords": []},
+    {"id": "miss-02", "doc": null, "expectMiss": true, "question": "Vue3组合式API和选项式API怎么选型？", "keywords": []},
+    {"id": "miss-03", "doc": null, "expectMiss": true, "question": "住房公积金贷款利率是多少？", "keywords": []},
+    {"id": "miss-04", "doc": null, "expectMiss": true, "question": "Python的GIL对多线程有什么影响？", "keywords": []},
+    {"id": "miss-05", "doc": null, "expectMiss": true, "question": "日本旅游签证怎么办里？", "keywords": []},
+
+    {"id": "mt-01", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "setup": "SimpleDateFormat有什么线程安全问题？", "question": "那它应该怎么正确使用？", "keywords": ["ThreadLocal"]},
+    {"id": "mt-02", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "setup": "为什么不允许用Executors创建线程池？", "question": "那正确的方式是什么？", "keywords": ["ThreadPoolExecutor"]},
+    {"id": "mt-03", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "setup": "POJO类属性为什么要用包装数据类型？", "question": "那RPC方法的返回值应该用什么？", "keywords": ["RPC"]},
+    {"id": "mt-04", "doc": "阿里巴巴Java开发手册(黄山版).pdf", "setup": "为什么不能在foreach循环里对元素进行remove或add操作？", "question": "那正确的删除方式是什么？", "keywords": ["Iterator"]},
+    {"id": "mt-05", "doc": "Arthas诊断工具中文手册.md", "setup": "Arthas的tt命令是做什么的？", "question": "它和watch的区别是什么？", "keywords": ["tunnel"]}
+  ]
+}

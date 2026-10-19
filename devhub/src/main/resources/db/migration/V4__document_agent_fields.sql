@@ -1,0 +1,1 @@
+ALTER TABLE document ADD COLUMN file_path VARCHAR(1024) NULL;

@@ -1,0 +1,198 @@
+# DevHub 宿主配置
+devhub:
+  jwt:
+    secret: ${DEVHUB_JWT_SECRET:devhub-skeleton-secret-key-please-change-in-prod-32bytes}
+    ttl-hours: 24
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: agent-platform
+  profiles:
+    active: dev
+
+  # Jackson 全局配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  # Redis 配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 3000ms
+      timeout: 5000ms
+
+  # 数据库配置
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:devhub}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      connection-timeout: 30000
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+# MyBatis Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.agent.platform.model.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Milvus 向量数据库配置
+milvus:
+  host: ${MILVUS_HOST:localhost}
+  port: ${MILVUS_PORT:19530}
+  collection-name: ${MILVUS_COLLECTION:agent_documents}
+  dimension: 1024
+  index-type: IVF_FLAT
+  metric-type: COSINE
+  nlist: 1024
+  nprobe: 16
+
+# Agent 平台配置
+agent:
+  orchestrator:
+    default-mode: REACT
+    max-iterations: 10
+    timeout-seconds: 120
+  memory:
+    short-term:
+      max-turns: 20
+      ttl-minutes: 60
+    long-term:
+      enabled: true
+  rag:
+    chunk-size: 512
+    chunk-overlap: 64
+    # 两阶段检索架构（QAnything）：深召回 -> RRF 融合 -> 重排精筛
+    top-k: 5           # 重排后最终进入生成的切片数
+    recall-depth: 25   # 每通道粗召回深度（向量/关键词/exact 各自的上限）
+    candidate-n: 15    # RRF 融合后进入重排的候选池大小
+    child-size: 100000 # Parent-Child 子块长度；调小(如200)启用二级检索。
+                       # 实测(2026-10-16)：200字子块使 kwRecall 0.926->0.83，BM25区分度受损，
+                       # 默认回滚为单层等价，待 Milvus sparse 通道配套后再评估启用
+    similarity-threshold: 0.7
+    # 防幻觉三道防线
+    gate-top1-score: 0.5     # 方案一 CRAG 门控：重排 top1 低于此值 → 拒答（而非弱资料硬答）
+    citation-min-ratio: 0.6  # 方案二：被引用句占比低于此值 → 带反馈重生成一次
+    faithfulness-model: glm-4-flash  # 方案三：忠实度校验用的免费模型
+
+  # Prompt 注入防护（NeMo Guardrails 三层 rail + LLM Guard scanner 借鉴）
+  security:
+    input-action: block        # 高置信注入输入的处理：block 拦截 | log 仅记录
+    strip-injected-lines: true # 检索内容中指令样文本行的中和开关
+
+  # 对话接口限流（Redis 固定窗口，入口节流；管道内部保护见 llm.max-concurrent）
+  ratelimit:
+    enabled: true
+    global-per-sec: 120
+    per-ip-per-sec: 15
+    # 重排 provider（对标 Dify rerank provider 抽象 / QAnything 两阶段检索）
+    # llm   —— glm-4-flash 单次批量打分（免费）
+    # zhipu —— 智谱官方 Rerank API（cross-encoder，更准，按量计费，失败自动降级 llm）
+    rerank:
+      provider: llm
+      model: rerank
+      base-url: ${OPENAI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+      api-key: ${OPENAI_API_KEY:}
+  circuit-breaker:
+    failure-threshold: 5
+    success-threshold: 3
+    timeout-seconds: 30
+
+  # 多模型路由配置（LangChain4j，OpenAI 兼容协议）
+  llm:
+    # 高并发保护：LLM 调用全局并发上限与排队超时（超时返回"稍后再试"而非打爆供应商配额）
+    max-concurrent: 20
+    queue-timeout-seconds: 45
+    # 默认模型 + 降级链（对应下方 models 里的别名）
+    primary: ${LLM_PRIMARY:glm-4-flash}
+    fallback: glm-4-air,glm-4-plus
+    models:
+      glm-4-flash:
+        base-url: ${OPENAI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+        api-key: ${OPENAI_API_KEY:}
+        model: glm-4-flash
+        max-tokens: 4096
+        description: 智谱免费快速模型（默认）
+      glm-4-air:
+        base-url: ${OPENAI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+        api-key: ${OPENAI_API_KEY:}
+        model: glm-4-air
+        max-tokens: 4096
+        description: 智谱轻量模型（降级首选）
+      glm-4-plus:
+        base-url: ${OPENAI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+        api-key: ${OPENAI_API_KEY:}
+        model: glm-4-plus
+        max-tokens: 4096
+        description: 智谱旗舰模型
+      deepseek-chat:
+        base-url: https://api.deepseek.com/v1
+        api-key: ${DEEPSEEK_API_KEY:}
+        model: deepseek-chat
+        max-tokens: 8192
+        description: DeepSeek 对话模型（配置 DEEPSEEK_API_KEY 后自动启用）
+
+    # 向量模型（RAG 检索用，维度需与 milvus.dimension 一致）
+    embedding:
+      base-url: ${OPENAI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+      api-key: ${OPENAI_API_KEY:}
+      model: embedding-3
+      dimensions: 1024
+
+# Schema 迁移（现有库 baseline 跳过 V1，新环境自动建表）
+spring.flyway:
+  enabled: true
+  baseline-on-migrate: true
+  baseline-version: 1
+
+# 管理接口鉴权（为空则不启用鉴权）
+app:
+  admin-token: ${APP_ADMIN_TOKEN:}
+
+# 日志配置
+logging:
+  level:
+    com.agent.platform: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+
+# Actuator 端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized

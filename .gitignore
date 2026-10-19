@@ -1,0 +1,24 @@
+# Java 构建产物
+devhub/target/
+devhub/build/
+*.class
+*.jar
+
+# 运行时数据
+devhub/data/
+*.log
+
+# 前端
+devhub-web/node_modules/
+devhub-web/dist/
+devhub-web/.vite-dev.log
+
+# 测试产物
+gui-test-screenshots/
+
+# IDE / 系统
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+.DS_Store

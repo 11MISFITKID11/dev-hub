@@ -76,7 +76,7 @@ public class WorkflowEngine {
         return null;
     }
 
-    /** 下一个可流转状态（advance：目标 sort 严格大于当前；无则任选一条） */
+    /** 下一个可流转状态（advance：取 sort 严格大于当前且最近的一个，逐级前进不跳级；无则任选一条） */
     public String nextForwardState(Long projectId, String from) {
         List<WorkflowTransition> outs = transitionMapper.selectList(
                 new LambdaQueryWrapper<WorkflowTransition>()
@@ -85,10 +85,10 @@ public class WorkflowEngine {
         if (outs.isEmpty()) return null;
         List<WorkflowState> ordered = statesOf(projectId);
         int fromSort = sortOf(ordered, from);
-        String best = null; int bestSort = Integer.MIN_VALUE;
+        String best = null; int bestSort = Integer.MAX_VALUE;
         for (WorkflowTransition t : outs) {
             int toSort = sortOf(ordered, t.getToState());
-            if (toSort > fromSort && (toSort > bestSort || (toSort == bestSort && t.getId() != null))) {
+            if (toSort > fromSort && toSort < bestSort) {
                 best = t.getToState(); bestSort = toSort;
             }
         }

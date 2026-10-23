@@ -12,6 +12,12 @@ docker stop devhub-app 2>/dev/null || true
 echo "==> 3/4 后端构建并后台运行"
 cd /d/kaifa/javaproject/project-devhub/devhub
 mvn -q package -DskipTests
+# DeepSeek 切换：仅在 .env 配置了值时导出（空值会覆盖 Spring 默认主模型）
+DEEPSEEK_API_KEY=$(grep '^DEEPSEEK_API_KEY=' /d/docker/middleware/.env | head -1 | cut -d= -f2 || true)
+[ -n "$DEEPSEEK_API_KEY" ] && export DEEPSEEK_API_KEY
+LLM_PRIMARY=$(grep '^LLM_PRIMARY=' /d/docker/middleware/.env | head -1 | cut -d= -f2 || true)
+[ -n "$LLM_PRIMARY" ] && export LLM_PRIMARY
+echo "   对话主模型: ${LLM_PRIMARY:-glm-4-flash（默认）}"
 MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_DB=devhub \
 REDIS_HOST=localhost MILVUS_HOST=localhost \
 OPENAI_API_KEY=$(grep '^OPENAI_API_KEY' /d/docker/middleware/.env | cut -d= -f2) \

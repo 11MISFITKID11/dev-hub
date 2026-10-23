@@ -106,10 +106,10 @@ public class MultiRetriever {
         try {
             String version = cacheService.get(INDEX_VERSION_KEY, String.class).orElse("0");
             cacheKey = "rag:result:v" + version + ":" + currentScope() + ":" + md5(rewrites.normalized());
-            var cached = cacheService.get(cacheKey, List.class);
-            if (cached.isPresent() && !cached.get().isEmpty()) {
+            List<RetrievalResult> cached = readResultCache(cacheKey);
+            if (cached != null && !cached.isEmpty()) {
                 log.info("检索结果缓存命中，跳过检索");
-                return cached.get();
+                return cached;
             }
         } catch (Exception e) {
             log.warn("检索缓存读取失败: {}", e.getMessage());
@@ -173,6 +173,33 @@ public class MultiRetriever {
             cacheService.set(cacheKey, filtered, RESULT_CACHE_TTL);
         }
         return filtered;
+    }
+
+    /** 缓存条目转换用（泛型擦除后需逐条 convertValue 回强类型） */
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * 读取检索结果缓存：Jackson 泛型擦除使 List 元素反序列化为 LinkedHashMap，
+     * 直接返回会在下游转型 RetrievalResult 时抛 ClassCastException（曾导致缓存命中必降级）。
+     * 逐条转回强类型；转换失败视为脏缓存，清除后按未命中处理（最坏退化为重新检索）
+     */
+    List<RetrievalResult> readResultCache(String cacheKey) {
+        Optional<List> cached = cacheService.get(cacheKey, List.class);
+        if (cached.isEmpty() || cached.get().isEmpty()) {
+            return null;
+        }
+        try {
+            List<RetrievalResult> results = new ArrayList<>();
+            for (Object element : cached.get()) {
+                results.add(objectMapper.convertValue(element, RetrievalResult.class));
+            }
+            return results;
+        } catch (Exception e) {
+            log.warn("检索缓存内容损坏，按未命中处理并清除: {}", e.getMessage());
+            cacheService.delete(cacheKey);
+            return null;
+        }
     }
 
     /**
@@ -498,6 +525,8 @@ public class MultiRetriever {
 
     @Data
     @Builder(toBuilder = true)
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
     public static class RetrievalResult {
         /** chunk 主键，用于去重 */
         private String chunkId;

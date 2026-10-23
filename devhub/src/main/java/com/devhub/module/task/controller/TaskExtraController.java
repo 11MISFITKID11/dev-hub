@@ -37,6 +37,7 @@ public class TaskExtraController {
     private final PrjTaskDepMapper depMapper;
     private final PrjWorklogMapper worklogMapper;
     private final WorkflowEngine workflowEngine;
+    private final com.devhub.module.task.service.TaskService taskService;
 
     // ---------- 子任务清单 ----------
 
@@ -165,20 +166,9 @@ public class TaskExtraController {
         return Result.success("ok");
     }
 
-    /** 供 TaskController 推进校验：未完成的前置任务列表 */
+    /** 未完成的前置任务列表（实现移入 TaskService，供推进校验与依赖端点共用） */
     public List<String> unfinishedDeps(Long taskId, Long projectId) {
-        Set<String> doneStates = workflowEngine.statesOf(projectId).stream()
-                .filter(s -> "DONE".equals(s.getCategory()))
-                .map(WorkflowState::getName).collect(Collectors.toSet());
-        List<Long> ids = depMapper.selectList(new LambdaQueryWrapper<PrjTaskDep>()
-                        .eq(PrjTaskDep::getTaskId, taskId))
-                .stream().map(PrjTaskDep::getDependsOn).toList();
-        List<String> blocked = new ArrayList<>();
-        for (Long id : ids) {
-            PrjTask t = taskMapper.selectById(id);
-            if (t != null && !doneStates.contains(t.getStatus())) blocked.add("#" + id + " " + t.getTitle());
-        }
-        return blocked;
+        return taskService.unfinishedDeps(taskId, projectId);
     }
 
     private boolean wouldCycle(Long taskId, Long dependsOn) {

@@ -39,6 +39,7 @@ public class ProjectController {
     private final com.devhub.module.project.service.WorkflowEngine workflowEngine;
     private final com.devhub.module.project.controller.CollabController collab;
     private final NotificationService notify;
+    private final com.devhub.module.ai.infrastructure.cache.RedisCacheService cacheService;
 
     @GetMapping
     public Result<Page<PrjProject>> list(@RequestParam(defaultValue = "1") long page,
@@ -108,6 +109,7 @@ public class ProjectController {
                 .eq(PrjMember::getProjectId, id).eq(PrjMember::getUsername, member.getUsername()));
         if (exists > 0) return Result.fail(400, "该成员已存在");
         memberMapper.insert(member);
+        cacheService.delete(com.devhub.common.ProjectScopeAspect.memberKey(id, member.getUsername()));
         return Result.success("ok");
     }
 
@@ -117,6 +119,7 @@ public class ProjectController {
     public Result<String> removeMember(@PathVariable Long id, @PathVariable String username) {
         memberMapper.delete(new LambdaQueryWrapper<PrjMember>()
                 .eq(PrjMember::getProjectId, id).eq(PrjMember::getUsername, username));
+        cacheService.delete(com.devhub.common.ProjectScopeAspect.memberKey(id, username));
         return Result.success("ok");
     }
 

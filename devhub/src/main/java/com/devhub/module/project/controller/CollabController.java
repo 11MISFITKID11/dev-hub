@@ -25,6 +25,7 @@ public class CollabController {
 
     private final PrjCommentMapper commentMapper;
     private final PrjActivityMapper activityMapper;
+    private final com.devhub.module.project.service.ActivityRecorder activityRecorder;
     private final com.devhub.common.NotificationService notify;
     private final com.devhub.common.ProjectScopeAspect scopeGuard;
     private final com.devhub.module.task.mapper.PrjTaskMapper taskMapper;
@@ -95,16 +96,10 @@ public class CollabController {
         return Result.success(c);
     }
 
-    /** 供任务/缺陷控制器记录字段变更动态（含状态流转时间戳，效能报表取数源） */
+    /** 供任务/缺陷控制器记录字段变更动态（实现委托 ActivityRecorder，保留签名兼容既有调用方） */
     public void record(String objType, Long objId, String action,
                        String field, Object oldV, Object newV, String actor) {
-        PrjActivity a = new PrjActivity();
-        a.setObjType(objType); a.setObjId(objId); a.setAction(action);
-        a.setFieldName(field);
-        a.setOldValue(oldV == null ? null : String.valueOf(oldV));
-        a.setNewValue(newV == null ? null : String.valueOf(newV));
-        a.setActor(actor == null ? currentUser() : actor);
-        activityMapper.insert(a);
+        activityRecorder.record(objType, objId, action, field, oldV, newV, actor);
     }
 
     private Long resolveProjectId(String objType, Long objId) {

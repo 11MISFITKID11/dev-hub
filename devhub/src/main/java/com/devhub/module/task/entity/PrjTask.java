@@ -26,6 +26,11 @@ public class PrjTask {
 
     @TableLogic
     Integer deleted;
+
+    /** 乐观锁版本号：并发编辑冲突检测（MyBatis-Plus OptimisticLockerInnerInterceptor） */
+    @Version
+    Integer version;
+
     LocalDateTime createTime;
     LocalDateTime updateTime;
 }

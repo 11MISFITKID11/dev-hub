@@ -34,37 +34,6 @@ public class RequirementController {
     private final PrjRequirementMapper reqMapper;
     private final PrjIterationMapper iterationMapper;
     private final PrjTaskMapper taskMapper;
-    private final com.devhub.module.project.service.WorkflowEngine workflowEngine;
-
-    /**
-     * 需求状态联动（闭环断点1补齐）：Story 下任务全部到达项目工作流终态 → DONE；
-     * 存在非终态任务 → DEVELOPING（含任务回退后从 DONE 回归）。REJECTED 不被联动覆盖。
-     * 由任务创建/状态变更调用，失败不影响任务主流程。
-     */
-    public void syncStoryStatus(Long requirementId) {
-        if (requirementId == null) return;
-        try {
-            PrjRequirement story = reqMapper.selectById(requirementId);
-            if (story == null || !"STORY".equals(story.getRtype()) || "REJECTED".equals(story.getStatus())) return;
-            List<PrjTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<PrjTask>()
-                    .eq(PrjTask::getRequirementId, requirementId));
-            if (tasks.isEmpty()) return;
-            java.util.Set<String> doneStates = workflowEngine.statesOf(story.getProjectId()).stream()
-                    .filter(s -> "DONE".equals(s.getCategory()))
-                    .map(com.devhub.module.project.entity.WorkflowState::getName)
-                    .collect(Collectors.toSet());
-            boolean allDone = tasks.stream().allMatch(t -> doneStates.contains(t.getStatus()));
-            String target = allDone ? "DONE" : "DEVELOPING";
-            if (!target.equals(story.getStatus())) {
-                PrjRequirement patch = new PrjRequirement();
-                patch.setId(requirementId);
-                patch.setStatus(target);
-                reqMapper.updateById(patch);
-            }
-        } catch (Exception ignore) {
-            // 联动失败不影响任务主流程
-        }
-    }
 
     /** Story 分页列表（可按项目/状态/Epic/关键字过滤） */
     @GetMapping

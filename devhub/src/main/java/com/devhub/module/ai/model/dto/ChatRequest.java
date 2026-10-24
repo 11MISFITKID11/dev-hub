@@ -39,12 +39,6 @@ public class ChatRequest {
     /** 是否同步返回忠实度分数（评测用；默认异步校验不阻塞响应） */
     private Boolean verifyFaithfulness;
 
-    /** 应用人设（开放 API 注入；内部接口不传） */
-    private String persona;
-
-    /** 语义答案缓存隔离域（开放 API 传 app:{appKey}；内部不传用登录用户域） */
-    private String cacheScope;
-
     /** 模型参数覆盖 */
     private ModelOptions modelOptions;
 

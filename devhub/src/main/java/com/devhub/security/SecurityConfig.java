@@ -35,8 +35,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/static/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // 开放 API：认证由 ApiKeyAuthFilter / Controller 内 appKey 校验完成
-                        .requestMatchers("/api/open/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint((req, res, e) -> {
                     res.setStatus(401);

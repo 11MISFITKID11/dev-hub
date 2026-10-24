@@ -3,8 +3,6 @@ import { useUserStore } from '../stores/user'
 
 const routes = [
   { path: '/login', component: () => import('../views/Login.vue'), meta: { public: true } },
-  // 挂件页：匿名公开路由（appKey 即凭据），不进 Layout
-  { path: '/embed/:appKey', component: () => import('../views/ai/EmbedWidget.vue'), meta: { public: true } },
   {
     path: '/',
     component: () => import('../views/Layout.vue'),
@@ -20,7 +18,6 @@ const routes = [
       { path: 'metrics', component: () => import('../views/Metrics.vue') },
       { path: 'system', component: () => import('../views/System.vue') },
       { path: 'ai/chat', component: () => import('../views/ai/Chat.vue') },
-      { path: 'ai/apps', component: () => import('../views/ai/Apps.vue') },
       { path: 'ai/history', component: () => import('../views/ai/History.vue') },
       { path: 'ai/ops', component: () => import('../views/ai/Ops.vue') }
     ]

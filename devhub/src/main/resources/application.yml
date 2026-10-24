@@ -120,7 +120,7 @@ agent:
     # llm   —— glm-4-flash 单次批量打分（免费）
     # zhipu —— 智谱官方 Rerank API（cross-encoder，更准，按量计费，失败自动降级 llm）
     rerank:
-      provider: llm
+      provider: ${AGENT_RAG_RERANK_PROVIDER:llm}
       model: rerank
       base-url: ${OPENAI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
       api-key: ${OPENAI_API_KEY:}

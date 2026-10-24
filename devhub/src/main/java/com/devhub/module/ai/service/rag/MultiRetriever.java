@@ -98,10 +98,25 @@ public class MultiRetriever {
         log.info("开始混合检索: query={}, topK={}", truncate(query, 80), topK);
         long start = System.currentTimeMillis();
 
+        // 改写缓存前移：热门问题先按"原问题+历史"直查结果缓存，命中跳过改写 LLM 调用（省 1~3s）
+        String rawKey = null;
+        try {
+            String version0 = cacheService.get(INDEX_VERSION_KEY, String.class).orElse("0");
+            rawKey = "rag:result:v" + version0 + ":" + currentScope() + ":raw:"
+                    + md5(query + "|" + (history == null ? "" : history));
+            List<RetrievalResult> rawCached = readResultCache(rawKey);
+            if (rawCached != null && !rawCached.isEmpty()) {
+                log.info("检索结果缓存命中（原问题直查，跳过改写）: query={}", truncate(query, 60));
+                return rawCached;
+            }
+        } catch (Exception e) {
+            log.warn("原问题缓存读取失败: {}", e.getMessage());
+        }
+
         QueryRewriteService.Rewrites rewrites = queryRewriteService.rewrite(query, history);
         log.info("查询类型: {} (改写: {})", rewrites.type(), truncate(rewrites.normalized(), 60));
 
-        // 检索结果缓存
+        // 检索结果缓存（改写后规范化 key）
         String cacheKey = null;
         try {
             String version = cacheService.get(INDEX_VERSION_KEY, String.class).orElse("0");
@@ -171,6 +186,10 @@ public class MultiRetriever {
 
         if (cacheKey != null && !filtered.isEmpty()) {
             cacheService.set(cacheKey, filtered, RESULT_CACHE_TTL);
+            // 双写原问题 key：下次同问免改写直查命中
+            if (rawKey != null) {
+                cacheService.set(rawKey, filtered, RESULT_CACHE_TTL);
+            }
         }
         return filtered;
     }

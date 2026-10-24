@@ -1,10 +1,8 @@
 package com.devhub.module.ai.service.intent;
 
-import com.devhub.module.ai.infrastructure.llm.ModelRouter;
 import com.devhub.module.ai.model.enums.AgentMode;
 import lombok.Builder;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -14,29 +12,12 @@ import java.util.List;
  * 意图识别服务
  * <p>
  * 分析用户输入的意图，决定使用哪种 Agent 模式和工具集合。
- * 支持基于规则的快速判断和基于 LLM 的深度理解。
+ * 规则快速判断 + 默认兜底（原 LLM 兜底已移除：前端固定传 DIRECT 模式，
+ * LLM 识别结果几乎不被消费，却让每次同步问答白付 1~3 秒 RTT）
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class IntentRecognizer {
-
-    private final ModelRouter modelRouter;
-
-    private static final String INTENT_PROMPT_TEMPLATE = """
-            你是一个意图识别引擎。请分析用户的输入，判断用户的意图类别。
-            
-            意图类别：
-            1. SIMPLE_CHAT - 简单闲聊、问候、闲谈
-            2. KNOWLEDGE_QA - 知识问答，需要检索知识库
-            3. TOOL_USE - 需要使用工具（搜索、计算、数据库查询等）
-            4. COMPLEX_TASK - 复杂任务，需要多步推理和规划
-            5. CODE_RELATED - 代码相关问题
-            
-            用户输入: %s
-            
-            请仅返回意图类别名称（如 SIMPLE_CHAT），不要返回其他内容。
-            """;
 
     /**
      * 识别用户意图
@@ -106,39 +87,20 @@ public class IntentRecognizer {
     }
 
     /**
-     * 基于 LLM 的意图识别（兜底方案）
+     * 兜底：规则未命中按知识问答处理（零成本；原 LLM 兜底因收益不抵 RTT 已移除）
      */
     private IntentResult llmBasedRecognize(String input) {
-        try {
-            String promptText = String.format(INTENT_PROMPT_TEMPLATE, input);
-            String intentType = modelRouter.call(promptText, null)
-                    .trim()
-                    .toUpperCase();
-
-            AgentMode mode = mapToAgentMode(intentType);
-            boolean needsRag = "KNOWLEDGE_QA".equals(intentType);
-
-            log.info("LLM 意图识别结果: type={}, mode={}", intentType, mode);
-
-            return IntentResult.builder()
-                    .intentType(intentType)
-                    .agentMode(mode)
-                    .confidence(0.8)
-                    .needsRag(needsRag)
-                    .suggestedTools(List.of())
-                    .build();
-        } catch (Exception e) {
-            log.error("LLM 意图识别失败，使用默认意图", e);
-            return IntentResult.builder()
-                    .intentType("KNOWLEDGE_QA")
-                    .agentMode(AgentMode.REACT)
-                    .confidence(0.5)
-                    .needsRag(true)
-                    .suggestedTools(List.of())
-                    .build();
-        }
+        log.info("规则未命中，按默认意图处理（KNOWLEDGE_QA）: input={}", truncate(input, 60));
+        return IntentResult.builder()
+                .intentType("KNOWLEDGE_QA")
+                .agentMode(AgentMode.REACT)
+                .confidence(0.5)
+                .needsRag(true)
+                .suggestedTools(List.of())
+                .build();
     }
 
+    /** 保留映射工具方法供规则层扩展使用 */
     private AgentMode mapToAgentMode(String intentType) {
         return switch (intentType) {
             case "SIMPLE_CHAT" -> AgentMode.DIRECT;

@@ -315,12 +315,33 @@ public class AgentOrchestrator {
         String ragContext = "";
         List<ChatResponse.SourceDocument> sources = new ArrayList<>();
         List<ChatResponse.ThinkingStep> steps = new ArrayList<>();
+        List<Float> queryVector = null;
         if (request.isEnableRag()) {
-            List<Float> queryVector = null;
             try {
                 queryVector = modelRegistry.embedToVector(request.getMessage());
             } catch (Exception e) {
                 log.warn("查询向量化失败: {}", e.getMessage());
+            }
+            // 语义答案缓存（对齐同步链路）：高度相似的历史问题直接复用答案，省整次检索+生成
+            if (queryVector != null) {
+                var cached = semanticAnswerCache.lookup(queryVector, request.getMessage(),
+                        multiRetriever.dataScope());
+                if (cached != null) {
+                    List<ChatResponse.SourceDocument> cachedSources = parseSources(cached.sourcesJson());
+                    String metaJson;
+                    try {
+                        Map<String, Object> cachedMeta = new LinkedHashMap<>();
+                        cachedMeta.put("conversationId", conversationId);
+                        cachedMeta.put("sources", cachedSources == null ? List.of() : cachedSources);
+                        cachedMeta.put("thinkingSteps", List.of());
+                        metaJson = objectMapper.writeValueAsString(cachedMeta);
+                    } catch (Exception e) {
+                        metaJson = "{\"conversationId\":\"" + conversationId + "\"}";
+                    }
+                    traceService.endTrace(traceId);
+                    log.info("语义缓存命中（流式直返）: traceId={}", traceId);
+                    return Flux.just("__META__" + metaJson, cached.answer(), "[DONE]");
+                }
             }
             ragContext = performRAG(request.getMessage(), queryVector, sources, traceId, steps,
                     historyContext);
@@ -350,6 +371,8 @@ public class AgentOrchestrator {
         }
 
         StringBuilder replyBuffer = new StringBuilder();
+        final List<Float> finalVector = queryVector;
+        final String finalRagContext = ragContext;
         return meta.concatWith(modelRouter.stream(promptText, forceModel))
                 .filter(text -> !text.isEmpty())
                 .doOnNext(replyBuffer::append)
@@ -360,6 +383,16 @@ public class AgentOrchestrator {
                             forceModel != null ? forceModel : modelRegistry.primaryName(),
                             (int) (tokens[0] + tokens[1]));
                     recordAiUsage(forceModel != null ? forceModel : modelRegistry.primaryName(), tokens);
+                    // 语义缓存写入（对齐同步链路）：真正基于知识库的答案才进缓存
+                    if (request.isEnableRag() && !finalRagContext.isBlank() && finalVector != null
+                            && !sources.isEmpty() && replyBuffer.length() > 0) {
+                        try {
+                            semanticAnswerCache.store(finalVector, request.getMessage(),
+                                    replyBuffer.toString(), objectMapper.writeValueAsString(sources),
+                                    forceModel != null ? forceModel : modelRegistry.primaryName(),
+                                    multiRetriever.dataScope());
+                        } catch (Exception ignored) { }
+                    }
                     traceService.endTrace(traceId);
                     log.info("流式对话完成: traceId={}", traceId);
                 })

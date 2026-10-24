@@ -17,6 +17,8 @@ DEEPSEEK_API_KEY=$(grep '^DEEPSEEK_API_KEY=' /d/docker/middleware/.env | head -1
 [ -n "$DEEPSEEK_API_KEY" ] && export DEEPSEEK_API_KEY
 LLM_PRIMARY=$(grep '^LLM_PRIMARY=' /d/docker/middleware/.env | head -1 | cut -d= -f2 || true)
 [ -n "$LLM_PRIMARY" ] && export LLM_PRIMARY
+AGENT_RAG_RERANK_PROVIDER=$(grep '^AGENT_RAG_RERANK_PROVIDER=' /d/docker/middleware/.env | head -1 | cut -d= -f2 || true)
+[ -n "$AGENT_RAG_RERANK_PROVIDER" ] && export AGENT_RAG_RERANK_PROVIDER
 echo "   对话主模型: ${LLM_PRIMARY:-glm-4-flash（默认）}"
 MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_DB=devhub \
 REDIS_HOST=localhost MILVUS_HOST=localhost \

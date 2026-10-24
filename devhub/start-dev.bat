@@ -32,6 +32,7 @@ for /f "usebackq tokens=1,* delims==" %%a in ("D:\docker\middleware\.env") do (
     if /i "%%a"=="OPENAI_API_KEY" set "OPENAI_API_KEY=%%b"
     if /i "%%a"=="DEEPSEEK_API_KEY" set "DEEPSEEK_API_KEY=%%b"
     if /i "%%a"=="LLM_PRIMARY" set "LLM_PRIMARY=%%b"
+    if /i "%%a"=="AGENT_RAG_RERANK_PROVIDER" set "AGENT_RAG_RERANK_PROVIDER=%%b"
 )
 if "!OPENAI_API_KEY!"=="" (
     echo 警告：未从 .env 读到 OPENAI_API_KEY，AI 问答不可用（其余功能正常）
@@ -57,6 +58,7 @@ REM 仅在 .env 配置了值时透传（空值传给 Spring 会覆盖默认值�
 set "EXTRA_ENV="
 if not "!DEEPSEEK_API_KEY!"=="" set "EXTRA_ENV=!EXTRA_ENV!set DEEPSEEK_API_KEY=!DEEPSEEK_API_KEY!&& "
 if not "!LLM_PRIMARY!"=="" set "EXTRA_ENV=!EXTRA_ENV!set LLM_PRIMARY=!LLM_PRIMARY!&& "
+if not "!AGENT_RAG_RERANK_PROVIDER!"=="" set "EXTRA_ENV=!EXTRA_ENV!set AGENT_RAG_RERANK_PROVIDER=!AGENT_RAG_RERANK_PROVIDER!&& "
 
 start "DevHub-Backend-8080" cmd /k "cd /d D:\kaifa\javaproject\project-devhub\devhub && set MYSQL_HOST=localhost&& set MYSQL_PORT=3307&& set MYSQL_DB=devhub&& set REDIS_HOST=localhost&& set MILVUS_HOST=localhost&& set OPENAI_API_KEY=%BKEY%&& set APP_ADMIN_TOKEN=mvp-token-2026&& %EXTRA_ENV%D:\java21\bin\java -jar target\devhub-server-0.1.0.jar"
 

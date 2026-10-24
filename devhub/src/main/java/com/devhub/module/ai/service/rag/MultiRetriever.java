@@ -86,6 +86,81 @@ public class MultiRetriever {
      * @return 融合排序后的结果
      */
     @SuppressWarnings("unchecked")
+    /** 检索调试轨迹：各阶段明细（重排与门控由调试端点补充） */
+    public record DebugTrace(Map<String, Object> rewrite, List<Map<String, Object>> channels,
+                             List<RetrievalResult> fused, Map<String, Object> timings, String scope) {}
+
+    /**
+     * 检索调试：走真实链路（改写→分通道召回→RRF 融合），返回各阶段明细与耗时。
+     * 通道路由与 retrieve() 保持一致，修改路由时需同步维护
+     */
+    public DebugTrace debugRetrieve(String query, List<Float> queryVector, String history) {
+        long totalStart = System.currentTimeMillis();
+
+        long t0 = System.currentTimeMillis();
+        QueryRewriteService.Rewrites rewrites = queryRewriteService.rewrite(query, history);
+        long rewriteMs = System.currentTimeMillis() - t0;
+        Map<String, Object> rewriteView = new LinkedHashMap<>();
+        rewriteView.put("normalized", rewrites.normalized());
+        rewriteView.put("variants", rewrites.variants());
+        rewriteView.put("english", rewrites.english());
+        rewriteView.put("type", rewrites.type());
+        rewriteView.put("ms", rewriteMs);
+
+        long t1 = System.currentTimeMillis();
+        Map<String, List<RetrievalResult>> channels = new LinkedHashMap<>();
+        if (rewrites.isExact()) {
+            for (String q : rewrites.allQueries()) {
+                channels.put("关键词[" + truncate(q, 24) + "]", keywordRetrieval(q));
+            }
+            channels.put("精确匹配", exactMatch(rewrites.normalized()));
+        } else {
+            List<Float> effectiveVector = queryVector;
+            if (hydeEnabled && rewrites.isComplex() && rewrites.hypothetical() != null
+                    && !rewrites.hypothetical().isBlank()) {
+                try {
+                    effectiveVector = modelRegistry.embedToVector(rewrites.hypothetical());
+                } catch (Exception ignored) { }
+            }
+            channels.put("向量", (effectiveVector != null && !effectiveVector.isEmpty())
+                    ? vectorRetrieval(effectiveVector) : Collections.emptyList());
+            if (rewrites.isComplex() && rewrites.english() != null && !rewrites.english().isBlank()) {
+                try {
+                    channels.put("向量(英文)", vectorRetrieval(modelRegistry.embedToVector(rewrites.english())));
+                } catch (Exception e) {
+                    channels.put("向量(英文)", Collections.emptyList());
+                }
+            }
+            for (String q : rewrites.allQueries()) {
+                channels.put("关键词[" + truncate(q, 24) + "]", keywordRetrieval(q));
+            }
+            if (rewrites.normalized() != null && !rewrites.normalized().isBlank()) {
+                channels.put("精确匹配", exactMatch(rewrites.normalized()));
+            }
+        }
+        List<RetrievalResult> fused = rrfFuse(new ArrayList<>(channels.values())).stream()
+                .limit(candidateN).toList();
+        long retrieveMs = System.currentTimeMillis() - t1;
+
+        List<Map<String, Object>> channelViews = new ArrayList<>();
+        channels.forEach((name, list) -> {
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("channel", name);
+            c.put("count", list.size());
+            c.put("top3", list.stream().limit(3).map(r -> Map.of(
+                    "fileName", r.getFileName() == null ? "" : r.getFileName(),
+                    "score", r.getScore(),
+                    "source", r.getSource() == null ? "" : r.getSource())).toList());
+            channelViews.add(c);
+        });
+
+        Map<String, Object> timings = new LinkedHashMap<>();
+        timings.put("rewriteMs", rewriteMs);
+        timings.put("retrieveMs", retrieveMs);
+        timings.put("totalMs", System.currentTimeMillis() - totalStart);
+        return new DebugTrace(rewriteView, channelViews, fused, timings, currentScope());
+    }
+
     public List<RetrievalResult> retrieve(String query, List<Float> queryVector) {
         return retrieve(query, queryVector, null);
     }

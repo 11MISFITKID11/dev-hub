@@ -366,7 +366,16 @@ public class MultiRetriever {
     /** 公开给编排层：语义缓存同样按数据域隔离 */
     public String dataScope() { return currentScope(); }
 
+    /** 开放链路检索域覆盖（app 部门域）；内部链路不设置，行为不变。开放 Controller 经 setScopeThen 配对设置/清理 */
+    private static final ThreadLocal<String> SCOPE_OVERRIDE = new ThreadLocal<>();
+
+    public static void setScopeOverride(String scope) { SCOPE_OVERRIDE.set(scope); }
+
+    public static void clearScopeOverride() { SCOPE_OVERRIDE.remove(); }
+
     private String currentScope() {
+        String override = SCOPE_OVERRIDE.get();
+        if (override != null) return override;
         try {
             var auth = org.springframework.security.core.context.SecurityContextHolder
                     .getContext().getAuthentication();

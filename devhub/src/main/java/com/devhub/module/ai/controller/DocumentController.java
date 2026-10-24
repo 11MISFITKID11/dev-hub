@@ -1,5 +1,6 @@
 package com.devhub.module.ai.controller;
 
+import com.devhub.common.OperLog;
 import com.devhub.module.ai.common.Result;
 import com.devhub.module.ai.infrastructure.vectordb.MilvusService;
 import com.devhub.module.ai.mapper.DocumentChunkMapper;
@@ -40,6 +41,22 @@ public class DocumentController {
     private final MilvusService milvusService;
     private final MultiRetriever multiRetriever;
     private final com.devhub.module.ai.mapper.KnowledgeFeedbackMapper feedbackMapper;
+
+    /** 网页一键入库：同步抓取抽取正文，异步入库与文件上传共用同一条 Stream 管道 */
+    @OperLog(module = "知识库", action = "网页入库")
+    @PostMapping("/url")
+    public Result<com.devhub.module.ai.model.dto.DocumentUploadResponse> ingestUrl(
+            @RequestBody java.util.Map<String, String> body) {
+        String url = body.get("url");
+        if (url == null || !url.startsWith("http")) {
+            return Result.fail(400, "url 必须以 http 开头");
+        }
+        Long categoryId = null;
+        if (body.get("categoryId") != null && !body.get("categoryId").isBlank()) {
+            categoryId = Long.parseLong(body.get("categoryId"));
+        }
+        return Result.success(asyncIngestService.submitUrl(url, categoryId));
+    }
 
     /**
      * 分页文档列表

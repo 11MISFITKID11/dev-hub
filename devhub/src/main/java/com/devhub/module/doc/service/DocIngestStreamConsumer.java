@@ -154,7 +154,8 @@ public class DocIngestStreamConsumer implements StreamListener<String, MapRecord
         return new AsyncIngestService.DocumentIngestEvent(
                 v.get("documentId"), v.get("fileName"), v.get("contentType"),
                 Path.of(v.get("tempPath")), Long.parseLong(v.get("fileSize")),
-                v.get("uploader"), parseLong(v.get("categoryId")), parseLong(v.get("deptId")));
+                v.get("uploader"), parseLong(v.get("categoryId")), parseLong(v.get("deptId")),
+                v.getOrDefault("content", ""));
     }
 
     private Long parseLong(String s) {
@@ -171,7 +172,7 @@ public class DocIngestStreamConsumer implements StreamListener<String, MapRecord
     }
 
     private void deleteTempQuietly(String tempPath) {
-        if (tempPath == null) {
+        if (tempPath == null || tempPath.isBlank()) {
             return;
         }
         try {

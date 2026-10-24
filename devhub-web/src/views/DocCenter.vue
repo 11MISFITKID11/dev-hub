@@ -12,6 +12,9 @@
         <el-upload :show-file-list="false" :before-upload="upload" action="">
           <el-button type="primary" :loading="uploading">{{ uploading ? '提交中…' : '上传文档' }}</el-button>
         </el-upload>
+        <el-input v-model="urlIngest" placeholder="粘贴网页 URL 一键入库" style="width:280px; margin-left:10px" size="small" clearable @keydown.enter="ingestUrl">
+          <template #append><el-button :loading="urlLoading" :disabled="!urlIngest || !urlIngest.startsWith('http')" @click="ingestUrl">网页入库</el-button></template>
+        </el-input>
         <el-button @click="catDlg = true; catForm = {}">新建分类</el-button>
       </div>
       <el-table :data="rows" v-loading="loading">
@@ -66,7 +69,18 @@ defineOptions({ name: 'DocCenter' })
 const f = ref({})
 const { rows, total, page, size, loading, load, reset } = useCrudList('/doc/documents', () => f.value)
 const cats = ref([]), catDlg = ref(false), catForm = ref({}), catRef = ref(null), saving = ref(false)
-const uploading = ref(false), ridx = ref(null)
+const uploading = ref(false)
+const urlIngest = ref(''), urlLoading = ref(false)
+async function ingestUrl() {
+  if (!urlIngest.value || !urlIngest.value.startsWith('http')) return
+  urlLoading.value = true
+  try {
+    const r = await api.post('/v1/documents/url', { url: urlIngest.value })
+    ElMessage.success(`「${r.fileName}」已提交解析`)
+    urlIngest.value = ''
+    load()
+  } finally { urlLoading.value = false }
+}, ridx = ref(null)
 
 // 空态引导：触发上传按钮的文件选择框
 function pickUpload() { document.querySelector('.el-upload input[type=file]')?.click() }

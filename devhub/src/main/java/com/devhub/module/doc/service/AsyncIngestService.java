@@ -45,10 +45,13 @@ public class AsyncIngestService {
     private final StringRedisTemplate redisTemplate;
     private final JdbcTemplate jdbc;
 
-    /** 入库任务：临时文件路径 + 重建外壳行所需元数据（临时文件在处理成功/死信前保留） */
+    /** 入库任务：文件型走 tempFile；网页型（contentType=text/url）直接携带抽取文本，无临时文件 */
     public record DocumentIngestEvent(String documentId, String fileName, String contentType,
                                       Path tempFile, long fileSize, String uploader,
-                                      Long categoryId, Long deptId) {}
+                                      Long categoryId, Long deptId, String content) {}
+
+    /** 网页入库内容类型标记（与上传文件的 MIME 区分，消费端据此跳过文件解析） */
+    public static final String TYPE_URL = "text/url";
 
     /**
      * 提交异步解析（上传接口同步部分，毫秒级返回）
@@ -84,6 +87,7 @@ public class AsyncIngestService {
             payload.put("uploader", uploader);
             payload.put("categoryId", categoryId == null ? "" : String.valueOf(categoryId));
             payload.put("deptId", deptId == null ? "" : String.valueOf(deptId));
+            payload.put("content", "");
             redisTemplate.opsForStream().add(
                     StreamRecords.newRecord().ofMap(payload)
                             .withStreamKey(DocIngestStreamConfig.STREAM_KEY),
@@ -121,9 +125,62 @@ public class AsyncIngestService {
             insertShell(event.documentId(), event.fileName(), event.fileSize(),
                     event.uploader(), event.categoryId(), event.deptId());
         }
+        String sourceType = TYPE_URL.equals(event.contentType()) ? "web" : "upload";
         etlPipeline.processText(event.documentId(), event.fileName(),
-                parseText(event), "upload", "active", null, event.fileSize());
+                TYPE_URL.equals(event.contentType()) ? event.content() : parseText(event),
+                sourceType, "active", null, event.fileSize());
         log.info("异步入库完成: id={}, file={}", event.documentId(), event.fileName());
+    }
+
+    /**
+     * 网页一键入库：同步抓取抽取正文（秒级），异步入库走同一条 Stream 管道（与文件上传共用幂等/重试/死信）
+     */
+    public com.devhub.module.ai.model.dto.DocumentUploadResponse submitUrl(String url, Long categoryId) {
+        org.jsoup.nodes.Document page;
+        try {
+            page = org.jsoup.Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 DevHubBot/1.0")
+                    .timeout(15_000)
+                    .get();
+        } catch (Exception e) {
+            throw new RuntimeException("网页抓取失败: " + e.getMessage(), e);
+        }
+        String title = page.title() == null || page.title().isBlank() ? url : page.title().trim();
+        String content = title + "\n\n" + page.body().wholeText().trim();
+
+        String documentId = UUID.randomUUID().toString().replace("-", "");
+        String uploader = currentUsername();
+        Long deptId = null;
+        try {
+            deptId = jdbc.queryForObject(
+                    "SELECT dept_id FROM sys_user WHERE username = ? AND deleted = 0",
+                    Long.class, uploader);
+        } catch (Exception ignored) { }
+
+        insertShell(documentId, title, content.length(), uploader, categoryId, deptId);
+        Map<String, String> payload = new HashMap<>();
+        payload.put("documentId", documentId);
+        payload.put("fileName", title);
+        payload.put("contentType", TYPE_URL);
+        payload.put("tempPath", "");
+        payload.put("fileSize", String.valueOf(content.length()));
+        payload.put("uploader", uploader);
+        payload.put("categoryId", categoryId == null ? "" : String.valueOf(categoryId));
+        payload.put("deptId", deptId == null ? "" : String.valueOf(deptId));
+        payload.put("content", content);
+        try {
+            redisTemplate.opsForStream().add(
+                    org.springframework.data.redis.connection.stream.StreamRecords.newRecord()
+                            .ofMap(payload).withStreamKey(DocIngestStreamConfig.STREAM_KEY),
+                    org.springframework.data.redis.connection.RedisStreamCommands.XAddOptions
+                            .maxlen(DocIngestStreamConfig.MAX_STREAM_LEN).approximateTrimming(true));
+        } catch (Exception e) {
+            documentMapper.deleteById(documentId);
+            throw new RuntimeException("网页入库任务入队失败: " + e.getMessage(), e);
+        }
+        log.info("网页入库任务已入队: id={}, url={}, 标题={}", documentId, url, title);
+        return com.devhub.module.ai.model.dto.DocumentUploadResponse.builder()
+                .documentId(documentId).fileName(title).chunkCount(0).status("processing").build();
     }
 
     /** PROCESSING 外壳行（文档中心列表立即可见"解析中"） */

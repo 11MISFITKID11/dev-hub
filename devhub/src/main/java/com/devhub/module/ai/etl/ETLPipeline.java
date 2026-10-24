@@ -172,7 +172,7 @@ public class ETLPipeline {
 
         // 知识生命周期治理（仅上传文档：版本链/生效日期/URL提取/冲突校验）
         String lifeNotes = "";
-        if ("upload".equals(sourceType)) {
+        if ("upload".equals(sourceType) || "web".equals(sourceType)) {
             try {
                 lifeNotes = lifecycleService.onDocumentIngested(documentId, fileName, text, vectors);
             } catch (Exception e) {

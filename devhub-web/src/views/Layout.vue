@@ -33,7 +33,7 @@
           <el-switch v-model="dark" inline-prompt active-icon="Moon" inactive-icon="Sunny" @change="applyTheme" />
           <el-dropdown @command="onCmd">
             <span style="cursor:pointer; display:flex; align-items:center; gap:6px">
-              <el-avatar :size="28" style="background:linear-gradient(135deg,#0071e3,#42a5f5); box-shadow:0 2px 8px rgba(0,113,227,.35)">{{ (store.username || '?')[0].toUpperCase() }}</el-avatar>
+              <el-avatar :size="28" style="background:var(--el-color-primary)">{{ (store.username || '?')[0].toUpperCase() }}</el-avatar>
               {{ store.username }}
             </span>
             <template #dropdown>
@@ -101,6 +101,6 @@ function onCmd(cmd) {
 
 <style scoped>
 .brand { display: flex; align-items: center; gap: 8px; padding: 14px 16px; cursor: pointer; }
-.blogo { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #0071e3, #42a5f5); color: #fff; font-weight: 800; font-size: 13px; line-height: 30px; text-align: center; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,113,227,.35); }
+.blogo { width: 30px; height: 30px; border-radius: 9px; background: var(--el-color-primary); color: #fff; font-weight: 800; font-size: 13px; line-height: 30px; text-align: center; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
 .bname { font-weight: 700; font-size: 15px; letter-spacing: .3px; }
 </style>

@@ -14,7 +14,7 @@
     <div style="flex:1; display:flex; flex-direction:column; min-width:0">
       <div ref="listEl" style="flex:1; overflow-y:auto; padding-right:8px">
         <div v-if="!msgs.length" style="text-align:center; padding-top:64px">
-          <div style="font-size:44px; line-height:1; margin-bottom:14px; opacity:.85">💬</div>
+          <el-icon :size="40" style="color:var(--el-color-primary); margin-bottom:14px"><ChatDotRound /></el-icon>
           <div style="color:var(--el-text-color-primary); font-size:15px; font-weight:600; margin-bottom:6px">问点什么吧</div>
           <div style="color:var(--el-text-color-secondary); font-size:13px; margin-bottom:18px">
             基于已上传文档作答 · 每句带出处 · 拒答不编造
@@ -63,6 +63,7 @@
 </template>
 
 <script setup>
+import { ChatDotRound } from '@element-plus/icons-vue'
 defineOptions({ name: 'ChatPage' })
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { marked } from 'marked'
@@ -173,14 +174,14 @@ onMounted(loadConvs)
 </script>
 
 <style scoped>
-.fb { cursor:pointer; opacity:.45; transition:all .15s; user-select:none }
+.fb { cursor:pointer; opacity:.45; transition:opacity .15s ease; user-select:none }
 .fb:hover { opacity:.9 }
 .fb.on { opacity:1; transform:scale(1.15) }
 .sug-chip {
   padding: 7px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
   background: var(--dh-glass-bg); border: 1px solid var(--dh-glass-border, rgba(255,255,255,.55));
   color: var(--el-text-color-regular);
-  transition: all .18s cubic-bezier(.4,0,.2,1);
+  transition: color .18s cubic-bezier(.4,0,.2,1), border-color .18s cubic-bezier(.4,0,.2,1), transform .18s cubic-bezier(.4,0,.2,1);
   -webkit-backdrop-filter: saturate(160%) blur(14px); backdrop-filter: saturate(160%) blur(14px);
 }
 .sug-chip:hover { color: var(--el-color-primary); border-color: var(--el-color-primary-light-5); transform: translateY(-1px); }
@@ -206,13 +207,13 @@ html.dark .conv-item:hover { background: rgba(79, 148, 234, 0.12); }
   color: #fff;
 }
 .b-user {
-  background: linear-gradient(135deg, #0071e3, #4098e0);
+  background: var(--el-color-primary);
   color: #fff;
   padding: 10px 16px;
   border-radius: 18px 18px 5px 18px;
   max-width: 72%;
   font-size: 14px;
-  box-shadow: 0 4px 14px rgba(0, 113, 227, 0.28);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 .b-ai {
   background: rgba(255, 255, 255, 0.66);
@@ -235,7 +236,7 @@ html.dark .b-ai { background: rgba(36, 36, 40, 0.66); }
   padding: 7px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
   background: var(--dh-glass-bg); border: 1px solid var(--dh-glass-border, rgba(255,255,255,.55));
   color: var(--el-text-color-regular);
-  transition: all .18s cubic-bezier(.4,0,.2,1);
+  transition: color .18s cubic-bezier(.4,0,.2,1), border-color .18s cubic-bezier(.4,0,.2,1), transform .18s cubic-bezier(.4,0,.2,1);
   -webkit-backdrop-filter: saturate(160%) blur(14px); backdrop-filter: saturate(160%) blur(14px);
 }
 .sug-chip:hover { color: var(--el-color-primary); border-color: var(--el-color-primary-light-5); transform: translateY(-1px); }

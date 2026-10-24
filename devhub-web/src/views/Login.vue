@@ -59,11 +59,8 @@ async function doLogin() {
   inset: -20%;
   z-index: 0;
   background:
-    radial-gradient(900px 640px at 18% 22%, rgba(0, 113, 227, 0.34), transparent 58%),
-    radial-gradient(860px 620px at 82% 16%, rgba(175, 82, 222, 0.26), transparent 56%),
-    radial-gradient(980px 700px at 78% 82%, rgba(90, 200, 250, 0.30), transparent 58%),
-    radial-gradient(760px 560px at 14% 86%, rgba(255, 45, 85, 0.16), transparent 56%),
-    radial-gradient(700px 520px at 50% 50%, rgba(52, 199, 89, 0.10), transparent 60%);
+    radial-gradient(1000px 720px at 78% 18%, rgba(0, 113, 227, 0.20), transparent 58%),
+    radial-gradient(820px 580px at 16% 84%, rgba(0, 113, 227, 0.10), transparent 60%);
   animation: aurora-drift 26s ease-in-out infinite alternate;
 }
 @keyframes aurora-drift {
@@ -85,9 +82,9 @@ async function doLogin() {
 .login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
 .logo {
   width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0;
-  background: linear-gradient(135deg, #0071e3, #42a5f5);
+  background: var(--el-color-primary);
   color: #fff; font-weight: 800; font-size: 18px; line-height: 44px; text-align: center;
-  box-shadow: 0 4px 14px rgba(0, 113, 227, 0.4);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 .brand-name { font-weight: 700; font-size: 16px; letter-spacing: .3px; }
 .brand-slogan { color: var(--el-text-color-secondary); font-size: 12px; }
@@ -97,10 +94,10 @@ h2 { font-size: 20px; margin-bottom: 4px; letter-spacing: .2px; }
   width: 100%;
   margin-top: 4px;
   border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(0, 113, 227, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 .login-btn:hover { transform: translateY(-1px); }
 .login-btn { transition: transform .15s ease, box-shadow .15s ease; }
-.hint { margin-top: 16px; color: var(--el-text-color-secondary); font-size: 11.5px; line-height: 1.8; }
+.hint { margin-top: 16px; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.8; }
 .login-footer { position: relative; z-index: 1; margin-top: 22px; color: var(--el-text-color-placeholder); font-size: 12px; }
 </style>

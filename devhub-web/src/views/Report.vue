@@ -11,7 +11,7 @@
         <el-table-column label="合计" width="90"><template #default="s"><b>{{ s.row.total_tokens }}</b></template></el-table-column>
         <el-table-column label="占比">
           <template #default="s">
-            <div style="background:linear-gradient(90deg,var(--el-color-primary),#42a5f5); height:8px; border-radius:4px"
+            <div style="background:var(--el-color-primary); height:8px; border-radius:4px"
                  :style="{ width: Math.max(3, s.row.total_tokens / max * 100) + '%' }" />
           </template>
         </el-table-column>

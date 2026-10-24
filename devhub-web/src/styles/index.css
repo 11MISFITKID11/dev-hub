@@ -18,13 +18,16 @@
   --el-color-primary-light-8: #cfe2fa;
   --el-color-primary-light-9: #e8f2fd;
   --el-color-primary-dark-2: #005ab8;
+  /* 对比度修正：次要文字达到 WCAG AA (4.5:1) */
+  --el-text-color-secondary: #6a6e78;
+  --el-text-color-placeholder: #9a9ea8;
 
   /* ---- 毛玻璃材质（三档）----
      glass   ：内容卡片 —— 磨砂 + 轻微提亮
      glass-2 ：侧栏 / 顶栏 / 抽屉 —— Chrome Material，更实
      glass-3 ：弹层（下拉 / 弹窗 / 消息）—— 最实，保证可读性 */
-  --dh-glass-bg: rgba(255, 255, 255, 0.62);
-  --dh-glass-blur: saturate(180%) blur(24px);
+  --dh-glass-bg: rgba(255, 255, 255, 0.86);
+  --dh-glass-blur: saturate(150%) blur(20px);
   --dh-glass-border: rgba(255, 255, 255, 0.55);
   --dh-hairline: rgba(0, 0, 0, 0.07);
 
@@ -49,7 +52,7 @@
 }
 
 html.dark {
-  --dh-glass-bg: rgba(30, 30, 34, 0.58);
+  --dh-glass-bg: rgba(30, 30, 34, 0.78);
   --dh-glass-border: rgba(255, 255, 255, 0.10);
   --dh-hairline: rgba(255, 255, 255, 0.09);
 
@@ -79,17 +82,11 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(1100px 720px at 6% -12%, rgba(0, 113, 227, 0.16), transparent 56%),
-    radial-gradient(920px 620px at 97% 12%, rgba(175, 82, 222, 0.13), transparent 55%),
-    radial-gradient(1000px 700px at 88% 108%, rgba(90, 200, 250, 0.15), transparent 55%),
-    radial-gradient(820px 600px at 12% 104%, rgba(255, 45, 85, 0.07), transparent 55%);
+    radial-gradient(1200px 820px at 100% -10%, rgba(0, 113, 227, 0.05), transparent 55%);
 }
 html.dark body::before {
   background:
-    radial-gradient(1100px 720px at 6% -12%, rgba(0, 113, 227, 0.20), transparent 56%),
-    radial-gradient(920px 620px at 97% 12%, rgba(175, 82, 222, 0.14), transparent 55%),
-    radial-gradient(1000px 700px at 88% 108%, rgba(90, 200, 250, 0.10), transparent 55%),
-    radial-gradient(820px 600px at 12% 104%, rgba(255, 45, 85, 0.06), transparent 55%);
+    radial-gradient(1200px 820px at 100% -10%, rgba(0, 113, 227, 0.09), transparent 55%);
 }
 
 /* ---- 毛玻璃表面（工具类）---- */
@@ -236,7 +233,7 @@ html.dark .dh-rail .el-menu { --el-menu-hover-bg-color: rgba(79, 148, 234, 0.14)
   padding: 12px;
 }
 .kbcard {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.90);
   -webkit-backdrop-filter: var(--dh-glass-blur);
   backdrop-filter: var(--dh-glass-blur);
   border: 1px solid var(--dh-hairline);
@@ -249,7 +246,7 @@ html.dark .dh-rail .el-menu { --el-menu-hover-bg-color: rgba(79, 148, 234, 0.14)
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .kbcard:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10); }
-html.dark .kbcard { background: rgba(44, 44, 48, 0.72); }
+html.dark .kbcard { background: rgba(44, 44, 48, 0.80); }
 
 /* 滚动条细化 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -273,8 +270,12 @@ html.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
   --dh-duration: 0.18s;
   --dh-radius-pill: 999px;
   --dh-focus-ring: 0 0 0 3px rgba(0, 113, 227, 0.28);
+  --dh-font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
 }
-html.dark { --dh-focus-ring: 0 0 0 3px rgba(79, 148, 234, 0.35); }
+html.dark { --dh-focus-ring: 0 0 0 3px rgba(79, 148, 234, 0.35); --el-text-color-secondary: #a8adb8; }
+
+/* 数字/代码等宽（tabular 对齐）*/
+.dh-num { font-family: var(--dh-font-mono); font-variant-numeric: tabular-nums; }
 
 /* ---- 可访问性：键盘焦点环（鼠标点击不显示，Tab 可见） ---- */
 :focus-visible {
@@ -286,7 +287,7 @@ html.dark { --dh-focus-ring: 0 0 0 3px rgba(79, 148, 234, 0.35); }
 .el-button:focus-visible { box-shadow: var(--dh-focus-ring); }
 
 /* ---- 按钮：主操作轻投影 + 按压反馈（Apple 按钮质感） ---- */
-.el-button { transition: all var(--dh-duration) var(--dh-ease); }
+.el-button { transition: background-color var(--dh-duration) var(--dh-ease), border-color var(--dh-duration) var(--dh-ease), color var(--dh-duration) var(--dh-ease), box-shadow var(--dh-duration) var(--dh-ease), transform var(--dh-duration) var(--dh-ease); }
 .el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
   box-shadow: 0 1px 3px rgba(0, 113, 227, 0.30);
 }
@@ -359,4 +360,14 @@ html.dark .el-card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.30), 0 16px 44
 html.dark .el-dropdown-menu__item:not(.is-disabled):hover,
 html.dark .el-dropdown-menu__item:not(.is-disabled):focus {
   background: rgba(79, 148, 234, 0.16);
+}
+
+/* ---- 无障碍：尊重系统减弱动态偏好 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

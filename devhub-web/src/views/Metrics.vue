@@ -68,7 +68,7 @@
           <template #default="s">
             <div style="display:flex; align-items:center; gap:10px">
               <div style="flex:1; max-width:280px; height:8px; border-radius:4px; background:var(--el-fill-color-light)">
-                <div :style="{ width: Math.min(100, s.row.hoursThisWeek / 40 * 100) + '%', height: '8px', borderRadius: '4px', background: 'linear-gradient(90deg,var(--el-color-primary),#64d2ff)' }"></div>
+                <div :style="{ width: Math.min(100, s.row.hoursThisWeek / 40 * 100) + '%', height: '8px', borderRadius: '4px', background: 'var(--el-color-primary)' }"></div>
               </div>
               <b style="font-size:12.5px">{{ s.row.hoursThisWeek }}h</b>
             </div>

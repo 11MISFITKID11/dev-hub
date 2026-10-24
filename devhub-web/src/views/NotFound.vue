@@ -17,8 +17,8 @@ defineOptions({ name: 'NotFound' })
 .nf-card { width: 360px; text-align: center; border-radius: var(--dh-radius-float, 22px); }
 .code {
   font-size: 64px; font-weight: 800; letter-spacing: -2px; line-height: 1;
-  background: linear-gradient(135deg, #0071e3, #64d2ff);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  color: var(--el-color-primary);
+  font-family: var(--dh-font-mono); font-variant-numeric: tabular-nums;
 }
 .tip { color: var(--el-text-color-secondary); font-size: 13px; margin: 12px 0 20px; }
 </style>

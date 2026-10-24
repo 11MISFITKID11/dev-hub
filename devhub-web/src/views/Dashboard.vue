@@ -61,15 +61,14 @@ onMounted(async () => { d.value = await api.get('/report/dashboard') })
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -.5px;
-  background: linear-gradient(135deg, #0071e3, #64d2ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--el-text-color-primary);
+  font-family: var(--dh-font-mono);
+  font-variant-numeric: tabular-nums;
 }
 .lbl { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 2px; }
 .trend { display: flex; align-items: flex-end; gap: 12px; height: 120px; padding-top: 20px; }
 .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; }
-.bar { width: 60%; background: linear-gradient(180deg, rgba(255,68,68,.85), rgba(255,68,58,.35)); border-radius: 7px 7px 2px 2px; position: relative; }
+.bar { width: 60%; background: rgba(255, 59, 48, 0.78); border-radius: 7px 7px 2px 2px; position: relative; }
 .bar span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--el-text-color-secondary); }
 .bar-wrap i { font-style: normal; font-size: 11px; color: var(--el-text-color-secondary); margin-top: 4px; }
 </style>

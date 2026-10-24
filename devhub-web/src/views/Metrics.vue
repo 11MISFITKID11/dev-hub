@@ -11,7 +11,7 @@
         </div>
         <div>
           <div style="font-size:12px; color:var(--el-text-color-secondary); margin-bottom:6px">忠实度（近30天 {{ qa.faithCount || 0 }} 次）</div>
-          <div style="font-size:22px"><b>{{ (qa.faithAvg || 0).toFixed ? qa.faithAvg.toFixed(2) : qa.faithAvg }}</b></div>
+          <div style="font-size:22px"><b>{{ (qa.faithAvg || 0).toFixed(2) }}</b></div>
           <div style="font-size:11px" :style="{ color: (qa.faithLow || 0) > 0 ? '#e6a23c' : 'var(--el-text-color-secondary)' }">
             低于 0.6 共 {{ qa.faithLow || 0 }} 次{{ (qa.faithLow || 0) > 0 ? '，建议复核' : '' }}
           </div>

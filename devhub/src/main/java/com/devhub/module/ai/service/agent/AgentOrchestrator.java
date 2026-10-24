@@ -329,16 +329,21 @@ public class AgentOrchestrator {
                         multiRetriever.dataScope());
                 if (cached != null) {
                     List<ChatResponse.SourceDocument> cachedSources = parseSources(cached.sourcesJson());
+                    String cacheHitMsgId = java.util.UUID.randomUUID().toString().replace("-", "");
                     String metaJson;
                     try {
                         Map<String, Object> cachedMeta = new LinkedHashMap<>();
                         cachedMeta.put("conversationId", conversationId);
+                        cachedMeta.put("messageId", cacheHitMsgId);
                         cachedMeta.put("sources", cachedSources == null ? List.of() : cachedSources);
                         cachedMeta.put("thinkingSteps", List.of());
                         metaJson = objectMapper.writeValueAsString(cachedMeta);
                     } catch (Exception e) {
                         metaJson = "{\"conversationId\":\"" + conversationId + "\"}";
                     }
+                    // 命中答案也落库为新消息：会话历史可见且可点赞/点踩（反馈闭环不因缓存断链）
+                    persistConversation(conversationId, request.getMessage(), cached.answer(),
+                            cached.model(), 0, cacheHitMsgId);
                     traceService.endTrace(traceId);
                     log.info("语义缓存命中（流式直返）: traceId={}", traceId);
                     return Flux.just("__META__" + metaJson, cached.answer(), "[DONE]");

@@ -32,6 +32,9 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // SSE/异步请求的 ASYNC 分发不再重复鉴权（初始请求已过 JWT；
+                        // 拒绝会导致已提交的流连接被中断，前端 reader 异常）
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/static/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()

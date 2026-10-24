@@ -123,9 +123,10 @@ async function send() {
       buf += dec.decode(value, { stream: true })
       const events = buf.split('\n\n'); buf = events.pop()
       for (const evt of events) {
-        const line = evt.split('\n').find(l => l.startsWith('data:'))
-        if (!line) continue
-        const data = line.slice(5)
+        // SSE 规范：字段内换行编码为多个 data: 行，接收端 join('\n') 还原（缓存直返的整段答案含换行）
+        const dataLines = evt.split('\n').filter(l => l.startsWith('data:'))
+        if (!dataLines.length) continue
+        const data = dataLines.map(l => l.slice(5)).join('\n')
         if (data === '[DONE]') continue
         if (data.startsWith('__META__')) {
           const meta = JSON.parse(data.slice(8))

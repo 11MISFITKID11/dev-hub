@@ -225,7 +225,7 @@ public class AgentOrchestrator {
             String assistantMsgId = persistConversation(conversationId, request.getMessage(),
                     response.getReply(),
                     response.getModel() != null ? response.getModel() : modelRegistry.primaryName(),
-                    (int) (tokens[0] + tokens[1]));
+                    (int) (tokens[0] + tokens[1]), null);
 
             recordAiUsage(response.getModel() != null ? response.getModel() : modelRegistry.primaryName(), tokens);
 
@@ -360,10 +360,13 @@ public class AgentOrchestrator {
                 .observation("模型: " + (forceModel != null ? forceModel : modelRegistry.primaryName()))
                 .build());
 
+        // 预生成助手消息 ID：流式直返给前端，反馈接口按它定位消息
+        String assistantMsgId = java.util.UUID.randomUUID().toString().replace("-", "");
         Flux<String> meta = Flux.empty();
         try {
             Map<String, Object> metaInfo = new LinkedHashMap<>();
             metaInfo.put("conversationId", conversationId);
+            metaInfo.put("messageId", assistantMsgId);
             metaInfo.put("sources", sources);
             metaInfo.put("thinkingSteps", steps);
             meta = Flux.just("__META__" + objectMapper.writeValueAsString(metaInfo));
@@ -381,7 +384,7 @@ public class AgentOrchestrator {
                     persistConversation(conversationId, request.getMessage(),
                             replyBuffer.toString(),
                             forceModel != null ? forceModel : modelRegistry.primaryName(),
-                            (int) (tokens[0] + tokens[1]));
+                            (int) (tokens[0] + tokens[1]), assistantMsgId);
                     recordAiUsage(forceModel != null ? forceModel : modelRegistry.primaryName(), tokens);
                     // 语义缓存写入（对齐同步链路）：真正基于知识库的答案才进缓存
                     if (request.isEnableRag() && !finalRagContext.isBlank() && finalVector != null
@@ -699,7 +702,7 @@ public class AgentOrchestrator {
      * @return 助手消息 ID（供忠实度异步回写；落库失败返回 null）
      */
     private String persistConversation(String conversationId, String userMessage, String reply,
-                                     String model, int totalTokens) {
+                                     String model, int totalTokens, String presetAssistantId) {
         try {
             Conversation conversation = conversationMapper.selectById(conversationId);
             if (conversation == null) {
@@ -726,6 +729,7 @@ public class AgentOrchestrator {
                     .content(userMessage)
                     .build());
             Message assistant = Message.builder()
+                    .id(presetAssistantId)
                     .conversationId(conversationId)
                     .role(MessageRole.ASSISTANT)
                     .content(reply)

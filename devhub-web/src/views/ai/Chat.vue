@@ -19,7 +19,13 @@
         <div v-for="(m, i) in msgs" :key="i" :style="{ display:'flex', justifyContent: m.role === 'USER' ? 'flex-end' : 'flex-start', marginBottom:'14px' }">
           <div :class="m.role === 'USER' ? 'b-user' : 'b-ai'">
             <div v-if="m.role === 'USER'" style="white-space:pre-wrap">{{ m.content }}</div>
-            <div v-else class="md" v-html="m.html"></div>
+            <template v-else>
+              <div class="md" v-html="m.html"></div>
+              <div v-if="m.messageId && !streaming" style="margin-top:6px; display:flex; gap:6px; font-size:13px">
+                <span class="fb" :class="{ on: m.feedback === 1 }" title="有用" @click="vote(m, 1)">👍</span>
+                <span class="fb" :class="{ on: m.feedback === -1 }" title="无用，将记录知识缺口" @click="vote(m, -1)">👎</span>
+              </div>
+            </template>
           </div>
         </div>
         <div v-if="streaming && !msgs.length" style="color:var(--el-text-color-secondary); font-size:12.5px; padding:10px 0">
@@ -81,6 +87,11 @@ function render(text) {
   const html = marked.parse(text, { breaks: true, gfm: true })
   return DOMPurify.sanitize(html)
 }
+async function vote(m, v) {
+  if (m.feedback === v) return
+  await api.post(`/v1/chat/messages/${m.messageId}/feedback`, { value: v })
+  m.feedback = v
+}
 function scrollBottom() { nextTick(() => { if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight }) }
 
 async function send() {
@@ -123,6 +134,7 @@ async function send() {
             loadConvs()
           }
           aiMsg.sources = meta.sources || []
+          aiMsg.messageId = meta.messageId
         } else {
           raw += data
           if (!renderTick) {
@@ -150,6 +162,12 @@ function abort() { if (ctrl.value) ctrl.value.abort() }
 
 onMounted(loadConvs)
 </script>
+
+<style scoped>
+.fb { cursor:pointer; opacity:.45; transition:all .15s; user-select:none }
+.fb:hover { opacity:.9 }
+.fb.on { opacity:1; transform:scale(1.15) }
+</style>
 
 <style scoped>
 .conv-item {

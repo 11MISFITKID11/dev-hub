@@ -1,5 +1,33 @@
 <template>
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+    <el-card shadow="never" style="grid-column:1/-1"><template #header>问答质量 —— 反馈 / 忠实度 / 知识缺口（数据落库即运营）</template>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1.4fr; gap:20px">
+        <div>
+          <div style="font-size:12px; color:var(--el-text-color-secondary); margin-bottom:6px">用户反馈</div>
+          <div style="font-size:22px"><b style="color:#67c23a">👍 {{ qa.feedbackUp || 0 }}</b>
+            <span style="margin:0 10px; color:var(--el-border-color)">/</span>
+            <b style="color:#f56c6c">👎 {{ qa.feedbackDown || 0 }}</b></div>
+          <div style="font-size:11px; color:var(--el-text-color-secondary)">点踩自动记入知识缺口</div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--el-text-color-secondary); margin-bottom:6px">忠实度（近30天 {{ qa.faithCount || 0 }} 次）</div>
+          <div style="font-size:22px"><b>{{ (qa.faithAvg || 0).toFixed ? qa.faithAvg.toFixed(2) : qa.faithAvg }}</b></div>
+          <div style="font-size:11px" :style="{ color: (qa.faithLow || 0) > 0 ? '#e6a23c' : 'var(--el-text-color-secondary)' }">
+            低于 0.6 共 {{ qa.faithLow || 0 }} 次{{ (qa.faithLow || 0) > 0 ? '，建议复核' : '' }}
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--el-text-color-secondary); margin-bottom:6px">待处理知识缺口 Top5</div>
+          <div v-if="qa.gaps && qa.gaps.length" style="display:grid; gap:4px">
+            <div v-for="g in qa.gaps" :key="g.question" style="font-size:12.5px; display:flex; justify-content:space-between; gap:10px">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ g.question }}</span>
+              <el-tag size="small" type="warning">×{{ g.hitCount }}</el-tag>
+            </div>
+          </div>
+          <div v-else style="font-size:12.5px; color:var(--el-text-color-secondary)">暂无缺口，知识覆盖良好</div>
+        </div>
+      </div>
+    </el-card>
     <el-card shadow="never"><template #header>周期时长与吞吐（Cycle Time · Swarmia 式）</template>
       <el-descriptions :column="1" border size="small">
         <el-descriptions-item label="已完成任务数">{{ flow.doneCount }}</el-descriptions-item>
@@ -57,7 +85,7 @@ import api from '../api'
 
 defineOptions({ name: 'MetricsPage' })
 
-const flow = ref({})
+const flow = ref({}), qa = ref({})
 const workload = ref([]), wlLoading = ref(false)
 const fmt = h => h == null ? '-' : (h >= 24 ? (h / 24).toFixed(1) + ' 天' : h + ' 小时')
 // 图表高度按数据最大值归一化，杜绝固定像素比例导致的溢出/压扁
@@ -69,6 +97,7 @@ const cfdScale = computed(() => {
 })
 onMounted(async () => {
   flow.value = await api.get('/report/flow', { params: { weeks: 8 } })
+  try { qa.value = await api.get('/report/qa-quality') } catch (e) { qa.value = {} }
   wlLoading.value = true
   try { workload.value = (await api.get('/report/workload')) || [] } finally { wlLoading.value = false }
 })

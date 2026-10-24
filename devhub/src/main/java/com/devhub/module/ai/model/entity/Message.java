@@ -40,6 +40,9 @@ public class Message {
     /** 答案忠实度（0-1，RAGAS faithfulness 口径；null=未校验） */
     private Double faithScore;
 
+    /** 用户反馈：1 有用 / -1 无用（点踩联动知识缺口记录） */
+    private Integer feedback;
+
     /** 逻辑删除 */
     @TableLogic
     private Integer deleted;

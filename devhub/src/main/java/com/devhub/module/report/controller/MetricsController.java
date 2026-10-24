@@ -67,6 +67,41 @@ public class MetricsController {
     }
 
     /** 周期时长（创建→DONE）与吞吐量：近 N 周 */
+    /** 问答质量看板：用户反馈、忠实度分布（近30天）、待处理缺口 TopN（数据均已在库，只缺可视化） */
+    @GetMapping("/qa-quality")
+    public Result<Map<String, Object>> qaQuality() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("feedbackUp", count("SELECT COUNT(*) FROM message WHERE feedback = 1"));
+        out.put("feedbackDown", count("SELECT COUNT(*) FROM message WHERE feedback = -1"));
+        try {
+            Map<String, Object> faith = jdbc.queryForMap(
+                    "SELECT COUNT(*) AS cnt, IFNULL(AVG(faith_score),0) AS avg_score, " +
+                    "IFNULL(SUM(faith_score < 0.6),0) AS low_cnt " +
+                    "FROM message WHERE faith_score IS NOT NULL " +
+                    "AND create_time > NOW() - INTERVAL 30 DAY");
+            out.put("faithCount", ((Number) faith.get("cnt")).longValue());
+            out.put("faithAvg", Math.round(((Number) faith.get("avg_score")).doubleValue() * 100) / 100.0);
+            out.put("faithLow", ((Number) faith.get("low_cnt")).longValue());
+        } catch (Exception e) {
+            out.put("faithCount", 0); out.put("faithAvg", 0); out.put("faithLow", 0);
+        }
+        try {
+            out.put("gaps", jdbc.queryForList(
+                    "SELECT question, hit_count AS hitCount FROM knowledge_gap " +
+                    "WHERE status = 'open' ORDER BY hit_count DESC LIMIT 5"));
+        } catch (Exception e) {
+            out.put("gaps", java.util.List.of());
+        }
+        return Result.success(out);
+    }
+
+    private long count(String sql) {
+        try {
+            Long c = jdbc.queryForObject(sql, Long.class);
+            return c == null ? 0 : c;
+        } catch (Exception e) { return 0; }
+    }
+
     @GetMapping("/flow")
     public Result<Map<String, Object>> flow(@RequestParam(defaultValue = "8") int weeks) {
         List<PrjTask> done = taskMapper.selectList(new LambdaQueryWrapper<PrjTask>()

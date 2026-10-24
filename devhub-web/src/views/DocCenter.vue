@@ -69,7 +69,7 @@ defineOptions({ name: 'DocCenter' })
 const f = ref({})
 const { rows, total, page, size, loading, load, reset } = useCrudList('/doc/documents', () => f.value)
 const cats = ref([]), catDlg = ref(false), catForm = ref({}), catRef = ref(null), saving = ref(false)
-const uploading = ref(false)
+const uploading = ref(false), ridx = ref(null)
 const urlIngest = ref(''), urlLoading = ref(false)
 async function ingestUrl() {
   if (!urlIngest.value || !urlIngest.value.startsWith('http')) return
@@ -80,7 +80,7 @@ async function ingestUrl() {
     urlIngest.value = ''
     load()
   } finally { urlLoading.value = false }
-}, ridx = ref(null)
+}
 
 // 空态引导：触发上传按钮的文件选择框
 function pickUpload() { document.querySelector('.el-upload input[type=file]')?.click() }

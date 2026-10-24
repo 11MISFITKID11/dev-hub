@@ -257,3 +257,106 @@ html.dark .kbcard { background: rgba(44, 44, 48, 0.72); }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.28); }
 html.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+ * 精修层 v2（对标 shadcn 设计原则：token 单一真相源 /
+ *   4px 间距尺度 / focus 可访问性 / 克制的层次与过渡）
+ * ============================================================ */
+
+/* ---- 补齐设计令牌：间距尺度（4px 基准）与字号梯度 ---- */
+:root {
+  --dh-space-1: 4px;   --dh-space-2: 8px;   --dh-space-3: 12px;
+  --dh-space-4: 16px;  --dh-space-5: 20px;  --dh-space-6: 24px;  --dh-space-8: 32px;
+  --dh-text-2xs: 11px; --dh-text-xs: 12px;  --dh-text-sm: 13px;
+  --dh-text-base: 14px; --dh-text-md: 15px; --dh-text-lg: 18px; --dh-text-xl: 22px;
+  --dh-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dh-duration: 0.18s;
+  --dh-radius-pill: 999px;
+  --dh-focus-ring: 0 0 0 3px rgba(0, 113, 227, 0.28);
+}
+html.dark { --dh-focus-ring: 0 0 0 3px rgba(79, 148, 234, 0.35); }
+
+/* ---- 可访问性：键盘焦点环（鼠标点击不显示，Tab 可见） ---- */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--dh-focus-ring);
+  border-radius: var(--el-border-radius-small);
+}
+.el-menu-item:focus-visible,
+.el-button:focus-visible { box-shadow: var(--dh-focus-ring); }
+
+/* ---- 按钮：主操作轻投影 + 按压反馈（Apple 按钮质感） ---- */
+.el-button { transition: all var(--dh-duration) var(--dh-ease); }
+.el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
+  box-shadow: 0 1px 3px rgba(0, 113, 227, 0.30);
+}
+.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):hover {
+  box-shadow: 0 3px 10px rgba(0, 113, 227, 0.36);
+  transform: translateY(-0.5px);
+}
+.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):active {
+  transform: translateY(0) scale(0.985);
+  box-shadow: 0 1px 2px rgba(0, 113, 227, 0.30);
+}
+
+/* ---- 标签：胶囊化（Apple pill，弱化方块感） ---- */
+.el-tag { border-radius: var(--dh-radius-pill); padding: 0 10px; font-weight: 500; }
+
+/* ---- 卡片：hover 轻浮升（仅阴影层变化，无位移抖动） ---- */
+.el-card { transition: box-shadow var(--dh-duration) var(--dh-ease); }
+.el-card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05), 0 16px 44px rgba(0, 0, 0, 0.09) !important; }
+html.dark .el-card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.30), 0 16px 44px rgba(0, 0, 0, 0.40) !important; }
+
+/* ---- 输入：聚焦主色环 ---- */
+.el-input__wrapper:focus-within,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, var(--dh-focus-ring) !important;
+}
+.el-textarea__inner:focus { border-radius: var(--el-border-radius-base); }
+
+/* ---- 表格：行高透气 + 表头层级 ---- */
+.el-table .el-table__cell { padding: 11px 0; }
+.el-table th.el-table__cell { font-size: var(--dh-text-xs); letter-spacing: 0.4px; text-transform: none; }
+
+/* ---- 分页器：与表格右对齐留白一致 ---- */
+.el-pagination { --el-pagination-button-bg-color: transparent; gap: var(--dh-space-1); }
+
+/* ---- 弹层与消息：统一入场过渡 ---- */
+.el-dialog, .el-drawer, .el-message, .el-popper.is-light {
+  transition: opacity var(--dh-duration) var(--dh-ease);
+}
+
+/* ---- 空状态：弱化插画存在感 ---- */
+.el-empty__image { opacity: 0.75; }
+
+/* ---- 侧栏菜单：图标与文字基线对齐 + 分组标题间距 ---- */
+.dh-rail .el-menu-item,
+.dh-rail .el-sub-menu__title {
+  height: 40px;
+  line-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--dh-space-2);
+}
+.dh-rail .el-sub-menu .el-menu-item { padding-left: 44px !important; }
+
+/* ---- 下拉菜单：圆角与发丝边 ---- */
+.el-dropdown-menu {
+  border-radius: 14px;
+  border: 1px solid var(--dh-glass-border);
+  background: var(--dh-glass-3-bg);
+  -webkit-backdrop-filter: var(--dh-glass-3-blur);
+  backdrop-filter: var(--dh-glass-3-blur);
+  box-shadow: var(--dh-shadow-float);
+  padding: var(--dh-space-1);
+}
+.el-dropdown-menu__item { border-radius: 8px; margin: 1px 2px; }
+.el-dropdown-menu__item:not(.is-disabled):hover,
+.el-dropdown-menu__item:not(.is-disabled):focus {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+html.dark .el-dropdown-menu__item:not(.is-disabled):hover,
+html.dark .el-dropdown-menu__item:not(.is-disabled):focus {
+  background: rgba(79, 148, 234, 0.16);
+}

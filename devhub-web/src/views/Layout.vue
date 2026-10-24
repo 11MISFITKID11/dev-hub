@@ -10,11 +10,15 @@
       <el-menu :default-active="$route.path" :collapse="collapsed" router style="border-right: none">
         <template v-for="m in store.menuTree" :key="m.id">
           <el-sub-menu v-if="m.children && m.children.length" :index="String(m.id)">
-            <template #title>{{ m.name }}</template>
+            <template #title>
+              <el-icon v-if="iconOf(m.name)"><component :is="iconOf(m.name)" /></el-icon>
+              <span>{{ m.name }}</span>
+            </template>
             <el-menu-item v-for="k in m.children" :key="k.id" :index="k.path">{{ k.name }}</el-menu-item>
           </el-sub-menu>
           <el-menu-item v-else :index="m.id === 6 ? '/ai/chat' : (m.path || '/dashboard')">
-            {{ m.name }}
+            <el-icon v-if="iconOf(m.name)"><component :is="iconOf(m.name)" /></el-icon>
+            <span>{{ m.name }}</span>
           </el-menu-item>
         </template>
       </el-menu>
@@ -52,21 +56,35 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import NotificationBell from '../components/NotificationBell.vue'
 import GlobalSearch from '../components/GlobalSearch.vue'
+import { ChatDotRound, Folder, Odometer, List, Suitcase, DataAnalysis, Setting, Collection } from '@element-plus/icons-vue'
 
 const store = useUserStore()
 const route = useRoute(), router = useRouter()
 const collapsed = ref(localStorage.getItem('dh_collapsed') === '1')
 const dark = ref(localStorage.getItem('dh_theme') === 'dark')
 
+// 一级菜单图标（按菜单名映射；markRaw 避免组件被响应式代理）
+const menuIcons = {
+  '知识中枢': markRaw(ChatDotRound),
+  '文档中心': markRaw(Folder),
+  '工作台': markRaw(Odometer),
+  '需求管理': markRaw(List),
+  '研发协作': markRaw(Suitcase),
+  '报表统计': markRaw(DataAnalysis),
+  '系统管理': markRaw(Setting)
+}
+const iconOf = name => menuIcons[name] || null
+
 const titleMap = {
   '/dashboard': '工作台', '/project': '项目管理', '/task': '任务中心', '/defect': '缺陷跟踪',
-  '/doc': '文档中心', '/report': '报表统计', '/system': '系统管理',
-  '/ai/chat': '智能问答 · 对话', '/ai/history': '智能问答 · 会话历史', '/ai/ops': '智能问答 · 知识运营'
+  '/doc': '文档中心', '/requirement': '需求管理', '/report': '报表统计', '/metrics': '效能度量', '/system': '系统管理',
+  '/ai/chat': '知识中枢 · 对话问答', '/ai/history': '知识中枢 · 会话历史',
+  '/ai/ops': '知识中枢 · 知识运营', '/ai/eval': '知识中枢 · AI 评测'
 }
 const currentTitle = computed(() => titleMap[route.path] || 'DevHub')
 

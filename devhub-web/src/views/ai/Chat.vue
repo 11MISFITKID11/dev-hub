@@ -5,7 +5,7 @@
       <el-button type="primary" size="small" style="margin-bottom:10px; border-radius:10px" @click="newConv">＋ 新会话</el-button>
       <div style="flex:1; overflow-y:auto; padding:6px; border-radius:14px; background:rgba(255,255,255,.42); border:1px solid var(--dh-glass-border, rgba(255,255,255,.55)); -webkit-backdrop-filter:saturate(160%) blur(18px); backdrop-filter:saturate(160%) blur(18px)">
         <div v-for="c in convs" :key="c.id" class="conv-item" :class="{ on: cur && cur.id === c.id }" @click="openConv(c)">
-          {{ (c.title || c.id).slice(0, 20) }}
+          <span class="conv-title">{{ c.title || c.id }}</span>
         </div>
       </div>
     </div>
@@ -13,8 +13,15 @@
     <!-- 对话区 -->
     <div style="flex:1; display:flex; flex-direction:column; min-width:0">
       <div ref="listEl" style="flex:1; overflow-y:auto; padding-right:8px">
-        <div v-if="!msgs.length" style="text-align:center; color:var(--el-text-color-secondary); padding-top:80px; font-size:13px">
-          提问基于已上传文档作答 · 每句带出处 · 拒答不编造
+        <div v-if="!msgs.length" style="text-align:center; padding-top:64px">
+          <div style="font-size:44px; line-height:1; margin-bottom:14px; opacity:.85">💬</div>
+          <div style="color:var(--el-text-color-primary); font-size:15px; font-weight:600; margin-bottom:6px">问点什么吧</div>
+          <div style="color:var(--el-text-color-secondary); font-size:13px; margin-bottom:18px">
+            基于已上传文档作答 · 每句带出处 · 拒答不编造
+          </div>
+          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; padding:0 24px">
+            <span v-for="q in suggestions" :key="q" class="sug-chip" @click="input = q">{{ q }}</span>
+          </div>
         </div>
         <div v-for="(m, i) in msgs" :key="i" :style="{ display:'flex', justifyContent: m.role === 'USER' ? 'flex-end' : 'flex-start', marginBottom:'14px' }">
           <div :class="m.role === 'USER' ? 'b-user' : 'b-ai'">
@@ -64,6 +71,7 @@ import hljs from 'highlight.js'
 import api from '../../api'
 
 const convs = ref([]), cur = ref(null), msgs = ref([])
+const suggestions = ['日志打印有哪些强制规约？', 'HashMap 遍历用 keySet 还是 entrySet？', '为什么禁止使用 Executors 创建线程池？']
 const input = ref(''), streaming = ref(false), ragOn = ref(true)
 const listEl = ref(), ctrl = ref(null), srcOpen = ref(null)
 const srcDrawer = ref(false)
@@ -168,6 +176,17 @@ onMounted(loadConvs)
 .fb { cursor:pointer; opacity:.45; transition:all .15s; user-select:none }
 .fb:hover { opacity:.9 }
 .fb.on { opacity:1; transform:scale(1.15) }
+.sug-chip {
+  padding: 7px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  background: var(--dh-glass-bg); border: 1px solid var(--dh-glass-border, rgba(255,255,255,.55));
+  color: var(--el-text-color-regular);
+  transition: all .18s cubic-bezier(.4,0,.2,1);
+  -webkit-backdrop-filter: saturate(160%) blur(14px); backdrop-filter: saturate(160%) blur(14px);
+}
+.sug-chip:hover { color: var(--el-color-primary); border-color: var(--el-color-primary-light-5); transform: translateY(-1px); }
+.conv-item .conv-title {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 </style>
 
 <style scoped>
@@ -212,4 +231,15 @@ html.dark .b-ai { background: rgba(36, 36, 40, 0.66); }
 .md :deep(pre code) { background: none; padding: 0; }
 .md :deep(table) { border-collapse: collapse; } .md :deep(th), .md :deep(td) { border: 1px solid var(--el-border-color); padding: 5px 10px; font-size: 13px; }
 @keyframes blink { 50% { opacity: 0; } }
+.sug-chip {
+  padding: 7px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  background: var(--dh-glass-bg); border: 1px solid var(--dh-glass-border, rgba(255,255,255,.55));
+  color: var(--el-text-color-regular);
+  transition: all .18s cubic-bezier(.4,0,.2,1);
+  -webkit-backdrop-filter: saturate(160%) blur(14px); backdrop-filter: saturate(160%) blur(14px);
+}
+.sug-chip:hover { color: var(--el-color-primary); border-color: var(--el-color-primary-light-5); transform: translateY(-1px); }
+.conv-item .conv-title {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 </style>

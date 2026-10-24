@@ -69,7 +69,7 @@ public class AsyncIngestService {
                     Long.class, uploader);
         } catch (Exception ignored) { }
 
-        insertShell(documentId, fileName, file.getSize(), uploader, categoryId, deptId);
+        insertShell(documentId, fileName, file.getSize(), uploader, categoryId, deptId, "upload");
 
         // 字节落临时文件，任务描述写入 Redis Stream（MAXLEN 限长防膨胀）
         try {
@@ -123,7 +123,8 @@ public class AsyncIngestService {
         }
         if (doc == null) {
             insertShell(event.documentId(), event.fileName(), event.fileSize(),
-                    event.uploader(), event.categoryId(), event.deptId());
+                    event.uploader(), event.categoryId(), event.deptId(),
+                    TYPE_URL.equals(event.contentType()) ? "web" : "upload");
         }
         String sourceType = TYPE_URL.equals(event.contentType()) ? "web" : "upload";
         etlPipeline.processText(event.documentId(), event.fileName(),
@@ -157,7 +158,7 @@ public class AsyncIngestService {
                     Long.class, uploader);
         } catch (Exception ignored) { }
 
-        insertShell(documentId, title, content.length(), uploader, categoryId, deptId);
+        insertShell(documentId, title, content.length(), uploader, categoryId, deptId, "web");
         Map<String, String> payload = new HashMap<>();
         payload.put("documentId", documentId);
         payload.put("fileName", title);
@@ -185,7 +186,7 @@ public class AsyncIngestService {
 
     /** PROCESSING 外壳行（文档中心列表立即可见"解析中"） */
     private void insertShell(String documentId, String fileName, long fileSize,
-                             String uploader, Long categoryId, Long deptId) {
+                             String uploader, Long categoryId, Long deptId, String sourceType) {
         Document shell = new Document();
         shell.setId(documentId);
         shell.setFileName(fileName);
@@ -194,7 +195,7 @@ public class AsyncIngestService {
         shell.setChunkCount(0);
         shell.setStatus("processing");
         shell.setLifeStatus("active");
-        shell.setSourceType("upload");
+        shell.setSourceType(sourceType);
         shell.setCategoryId(categoryId);
         shell.setUploader(uploader);
         shell.setAuditStatus("PENDING");

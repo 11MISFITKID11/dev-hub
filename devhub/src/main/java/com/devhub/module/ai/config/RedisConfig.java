@@ -51,4 +51,17 @@ public class RedisConfig {
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }
+
+    /** 通知实时推送：订阅 devhub:notify 频道路由到 SSE 集线器 */
+    @Bean
+    public org.springframework.data.redis.listener.RedisMessageListenerContainer notifyListenerContainer(
+            RedisConnectionFactory connectionFactory,
+            com.devhub.common.NotifySseHub hub) {
+        org.springframework.data.redis.listener.RedisMessageListenerContainer container =
+                new org.springframework.data.redis.listener.RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        container.addMessageListener(hub,
+                new org.springframework.data.redis.listener.ChannelTopic(com.devhub.common.NotificationService.CHANNEL));
+        return container;
+    }
 }

@@ -30,6 +30,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElNotification } from 'element-plus'
 import api from '../api'
 
 const router = useRouter()
@@ -62,11 +63,30 @@ async function read(n) {
 }
 const fmt = t => (t || '').replace('T', ' ').slice(5, 16)
 
+let es = null
+
+function connectSse() {
+  const token = localStorage.getItem('dh_token')
+  if (!token || typeof EventSource === 'undefined') return
+  try {
+    es = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`)
+    es.addEventListener('notify', e => {
+      try {
+        const n = JSON.parse(e.data)
+        loadUnread()
+        ElNotification({ title: n.title || '新通知', message: (n.content || '').slice(0, 60), type: 'info', duration: 4000 })
+      } catch (err) {}
+    })
+    es.onerror = () => { es && es.close(); es = null }   // 断线由下方轮询兜底，30s 后重试连接
+  } catch (e) {}
+}
+
 onMounted(() => {
   loadUnread()
-  timer = setInterval(loadUnread, 60000)
+  connectSse()
+  timer = setInterval(() => { loadUnread(); if (!es) connectSse() }, 30000)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => { clearInterval(timer); es && es.close() })
 </script>
 
 <style scoped>

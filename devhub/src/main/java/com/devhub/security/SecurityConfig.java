@@ -35,6 +35,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/static/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // 通知 SSE：EventSource 带不了头，token 走查询参数由 Controller 校验
+                        .requestMatchers("/api/notifications/stream").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint((req, res, e) -> {
                     res.setStatus(401);

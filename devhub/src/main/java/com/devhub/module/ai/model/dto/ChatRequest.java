@@ -42,6 +42,9 @@ public class ChatRequest {
     /** 模型参数覆盖 */
     private ModelOptions modelOptions;
 
+    /** 评测模式：跳过语义答案缓存读写（保证回归跑批每次真实生成，不被历史答案短路） */
+    private Boolean evalMode;
+
     @Data
     @Builder
     @NoArgsConstructor

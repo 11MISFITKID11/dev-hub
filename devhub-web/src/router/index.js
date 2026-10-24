@@ -19,7 +19,8 @@ const routes = [
       { path: 'system', component: () => import('../views/System.vue') },
       { path: 'ai/chat', component: () => import('../views/ai/Chat.vue') },
       { path: 'ai/history', component: () => import('../views/ai/History.vue') },
-      { path: 'ai/ops', component: () => import('../views/ai/Ops.vue') }
+      { path: 'ai/ops', component: () => import('../views/ai/Ops.vue') },
+      { path: 'ai/eval', component: () => import('../views/ai/AiEval.vue') }
     ]
   },
   // 404 兜底（须放在最后）

@@ -128,8 +128,8 @@ public class AgentOrchestrator {
                     log.warn("查询向量化失败: {}", e.getMessage());
                 }
 
-                // 语义答案缓存：高度相似的历史问题直接复用答案（省整次生成）
-                if (queryVector != null) {
+                // 语义答案缓存：高度相似的历史问题直接复用答案（省整次生成）；评测跑批跳过保证回归有效
+                if (queryVector != null && !Boolean.TRUE.equals(request.getEvalMode())) {
                     var cached = semanticAnswerCache.lookup(queryVector, request.getMessage(), multiRetriever.dataScope());
                     if (cached != null) {
                         List<ChatResponse.SourceDocument> cachedSources = parseSources(cached.sourcesJson());
@@ -269,7 +269,8 @@ public class AgentOrchestrator {
             }
 
             // 生成成功且真正基于知识库（有实质出处、未被忠实度兜底否决）的答案才进入语义缓存
-            if (request.isEnableRag() && !ragMissed && !faithRefused && queryVector != null && !response.isCached()
+            if (request.isEnableRag() && !ragMissed && !faithRefused && queryVector != null
+                    && !Boolean.TRUE.equals(request.getEvalMode()) && !response.isCached()
                     && sources != null && !sources.isEmpty()) {
                 try {
                     semanticAnswerCache.store(queryVector, request.getMessage(), response.getReply(),

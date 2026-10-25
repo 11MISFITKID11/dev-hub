@@ -120,6 +120,33 @@ public class AuthController {
         return Result.success("已登出");
     }
 
+    /** 密钥轮换（仅管理员）：旧密钥降级为 previous，10 分钟宽限期内旧 token 仍可用 */
+    @PostMapping("/rotate-secret")
+    public Result<Void> rotateSecret(@org.springframework.web.bind.annotation.RequestBody java.util.Map<String, String> body) {
+        requireAdmin();
+        String secret = body.get("secret");
+        if (secret == null || secret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
+            return Result.fail(400, "新密钥至少 32 字节");
+        }
+        tokenProvider.rotate(secret);
+        return Result.success(null);
+    }
+
+    /** 全员强制下线（仅管理员）：此前签发的 token 全部 401 */
+    @PostMapping("/logout-all")
+    public Result<Void> logoutAll() {
+        requireAdmin();
+        tokenProvider.forceLogoutAll();
+        return Result.success(null);
+    }
+
+    private void requireAdmin() {
+        boolean admin = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().contains("ADMIN"));
+        if (!admin) throw new org.springframework.security.access.AccessDeniedException("仅管理员");
+    }
+
     private List<Map<String, Object>> menusOf(String username) {
         return jdbc.queryForList("""
                 SELECT DISTINCT m.id, m.parent_id, m.name, m.path, m.sort

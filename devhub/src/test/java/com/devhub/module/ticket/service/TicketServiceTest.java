@@ -9,6 +9,7 @@ import com.devhub.module.ticket.entity.SupportTicket;
 import com.devhub.module.ticket.entity.SupportTicketReply;
 import com.devhub.module.ticket.mapper.SupportTicketMapper;
 import com.devhub.module.ticket.mapper.SupportTicketReplyMapper;
+import com.devhub.module.ticket.mapper.TicketTagMapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,12 @@ class TicketServiceTest {
     private TicketAiService ticketAi;
     @Mock
     private NotificationService notify;
+    @Mock
+    private SlaService slaService;
+    @Mock
+    private TicketAssignService assignService;
+    @Mock
+    private TicketTagMapper tagMapper;
 
     private TicketService service;
 
@@ -52,7 +59,8 @@ class TicketServiceTest {
     @BeforeEach
     void setUp() {
         // 质检执行器用同步直跑，便于断言"结单即质检"
-        service = new TicketService(ticketMapper, replyMapper, ticketAi, notify, Runnable::run);
+        service = new TicketService(ticketMapper, replyMapper, ticketAi, notify, Runnable::run,
+                slaService, assignService, tagMapper);
     }
 
     private SupportTicket ticket(long id, String username, String status) {
@@ -68,14 +76,18 @@ class TicketServiceTest {
     }
 
     @Test
-    @DisplayName("建单：AI 分类失败 → 降级 OTHER/MEDIUM，不阻断")
+    @DisplayName("建单：AI 分类失败 → 降级 OTHER/MEDIUM，不阻断；SLA 上时钟 + 自动派单")
     void create_aiClassifyFails_fallback() {
+        java.util.concurrent.atomic.AtomicReference<SupportTicket> saved = new java.util.concurrent.atomic.AtomicReference<>();
         when(ticketMapper.insert(any(SupportTicket.class))).thenAnswer(inv -> {
-            inv.getArgument(0, SupportTicket.class).setId(9L);
+            SupportTicket t = inv.getArgument(0, SupportTicket.class);
+            t.setId(9L);
+            saved.set(t);
             return 1;
         });
         when(ticketAi.classify(any(), any())).thenReturn(null);
         when(ticketMapper.updateById(any(SupportTicket.class))).thenReturn(1);
+        when(ticketMapper.selectById(9L)).thenAnswer(inv -> saved.get());
 
         SupportTicket t = service.create("dev01", "登录失败", "SSO 登录后 403", "chat_refusal", "c1", "m1");
 
@@ -84,18 +96,24 @@ class TicketServiceTest {
         assertEquals("MEDIUM", t.getPriority());
         assertEquals(0, t.getAiClassified());
         assertEquals("PENDING", t.getStatus());
+        verify(slaService).armClock(any(), eq(false));
+        verify(assignService).autoAssign(any());
     }
 
     @Test
     @DisplayName("建单：AI 分类成功 → 采用 AI 结果")
     void create_aiClassified() {
+        java.util.concurrent.atomic.AtomicReference<SupportTicket> saved = new java.util.concurrent.atomic.AtomicReference<>();
         when(ticketMapper.insert(any(SupportTicket.class))).thenAnswer(inv -> {
-            inv.getArgument(0, SupportTicket.class).setId(10L);
+            SupportTicket t = inv.getArgument(0, SupportTicket.class);
+            t.setId(10L);
+            saved.set(t);
             return 1;
         });
         when(ticketAi.classify(any(), any()))
                 .thenReturn(new TicketAiService.ClassifyResult("ACCOUNT", "HIGH", "账号无法登录"));
         when(ticketMapper.updateById(any(SupportTicket.class))).thenReturn(1);
+        when(ticketMapper.selectById(10L)).thenAnswer(inv -> saved.get());
 
         SupportTicket t = service.create("dev01", "登录失败", "SSO 登录后 403", null, null, null);
 
@@ -105,11 +123,19 @@ class TicketServiceTest {
     }
 
     @Test
-    @DisplayName("受理：CAS 更新 0 行（已被他人受理）→ 409")
+    @DisplayName("受理：CAS 更新 0 行（已被他人受理）→ 409；已分派他人 → 409 提示转派")
     void take_casConflict_throws409() {
+        when(ticketMapper.selectById(1L)).thenReturn(ticket(1, "dev01", "PENDING"));
         when(ticketMapper.update(isNull(), any(Wrapper.class))).thenReturn(0);
         BusinessException ex = assertThrows(BusinessException.class, () -> service.take(1L, "admin"));
         assertEquals(409, ex.getCode());
+
+        SupportTicket assigned = ticket(2, "dev01", "PENDING");
+        assigned.setHandler("agent02");
+        when(ticketMapper.selectById(2L)).thenReturn(assigned);
+        BusinessException hijack = assertThrows(BusinessException.class, () -> service.take(2L, "admin"));
+        assertEquals(409, hijack.getCode());
+        assertTrue(hijack.getMessage().contains("转派"));
     }
 
     @Test

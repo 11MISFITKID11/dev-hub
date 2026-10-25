@@ -38,4 +38,15 @@ public interface SupportTicketMapper extends BaseMapper<SupportTicket> {
 
     @Select("SELECT COUNT(*) AS v FROM support_ticket WHERE deleted = 0 AND qc_score IS NOT NULL")
     long qcDoneCount();
+
+    /** 快捷视图计数：未分派 / 解决时钟 60 分钟内到期 / 已 SLA 超时 */
+    @Select("SELECT 'unassigned' AS k, COUNT(*) AS v FROM support_ticket "
+            + "WHERE deleted = 0 AND status = 'PENDING' AND handler IS NULL "
+            + "UNION ALL SELECT 'risk', COUNT(*) FROM support_ticket "
+            + "WHERE deleted = 0 AND status IN ('PENDING','PROCESSING') AND sla_breach = 0 "
+            + "AND sla_paused_at IS NULL AND sla_resolve_due IS NOT NULL "
+            + "AND sla_resolve_due < DATE_ADD(NOW(), INTERVAL 60 MINUTE) "
+            + "UNION ALL SELECT 'breached', COUNT(*) FROM support_ticket "
+            + "WHERE deleted = 0 AND status IN ('PENDING','PROCESSING') AND sla_breach = 1")
+    List<Map<String, Object>> viewStats();
 }

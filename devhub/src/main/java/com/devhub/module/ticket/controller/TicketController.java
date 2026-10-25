@@ -3,6 +3,7 @@ package com.devhub.module.ticket.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.devhub.module.ai.common.Result;
 import com.devhub.module.ticket.entity.SupportTicket;
+import com.devhub.module.ticket.service.TicketAssignService;
 import com.devhub.module.ticket.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class TicketController {
 
     private final TicketService ticketService;
+    private final TicketAssignService assignService;
 
     private static String me() {
         return SecurityContextHolder.getContext().getAuthentication().getName();
@@ -31,22 +33,30 @@ public class TicketController {
                 .anyMatch(a -> a.getAuthority().contains("ADMIN"));
     }
 
-    /** 建单（source: manual / chat_refusal / chat_dislike） */
+    /** 建单（source: manual / chat_refusal / chat_dislike）：AI 分类 → SLA 双时钟 → 自动派单 */
     @PostMapping
     public Result<SupportTicket> create(@RequestBody Map<String, String> body) {
         return Result.success(ticketService.create(me(), body.get("title"), body.get("content"),
                 body.get("source"), body.get("conversationId"), body.get("messageId")));
     }
 
-    /** 坐席视角分页 */
+    /** 坐席视角分页（view: all/unassigned/risk/breached/mine，返回体含 tags 映射） */
     @GetMapping
-    public Result<Page<SupportTicket>> page(@RequestParam(defaultValue = "1") long page,
+    public Result<Map<String, Object>> page(@RequestParam(defaultValue = "1") long page,
                                             @RequestParam(defaultValue = "10") long size,
                                             @RequestParam(required = false) String status,
                                             @RequestParam(required = false) String category,
                                             @RequestParam(required = false) String priority,
-                                            @RequestParam(required = false) String keyword) {
-        return Result.success(ticketService.page(page, size, status, category, priority, keyword));
+                                            @RequestParam(required = false) String keyword,
+                                            @RequestParam(required = false) String view) {
+        return Result.success(ticketService.pageWithTags(page, size, status, category, priority, keyword, view));
+    }
+
+    /** 转派候选坐席 */
+    @GetMapping("/agents")
+    public Result<?> agents() {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可访问");
+        return Result.success(assignService.candidates());
     }
 
     /** 客户视角：我的工单 */
@@ -81,11 +91,54 @@ public class TicketController {
         return Result.success(ticketService.take(id, me()));
     }
 
+    /** 转派：仅管理员 */
+    @PostMapping("/{id}/transfer")
+    public Result<SupportTicket> transfer(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可转派");
+        return Result.success(assignService.transfer(id, body.get("to"), me()));
+    }
+
+    /** 回复（管理员 body.role=internal 时为内部备注，客户不可见） */
     @PostMapping("/{id}/reply")
     public Result<Void> reply(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        // 客户回自己的单走 customer 角色；坐席（管理员）走 agent
         boolean agent = isAdmin();
-        ticketService.reply(id, me(), agent ? "agent" : "customer", body.get("content"));
+        String role = agent ? body.getOrDefault("role", "agent") : "customer";
+        if (!agent) role = "customer";
+        ticketService.reply(id, me(), role, body.get("content"));
+        return Result.success();
+    }
+
+    // ==================== 标签 ====================
+
+    @GetMapping("/tags")
+    public Result<?> tagList() {
+        return Result.success(ticketService.tagList());
+    }
+
+    @PostMapping("/tags")
+    public Result<?> tagCreate(@RequestBody Map<String, String> body) {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可管理标签");
+        return Result.success(ticketService.tagCreate(body.get("name"), body.get("color")));
+    }
+
+    @DeleteMapping("/tags/{tagId}")
+    public Result<Void> tagDelete(@PathVariable Long tagId) {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可管理标签");
+        ticketService.tagDelete(tagId);
+        return Result.success();
+    }
+
+    @PostMapping("/{id}/tags/{tagId}")
+    public Result<Void> tagAttach(@PathVariable Long id, @PathVariable Long tagId) {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可打标签");
+        ticketService.tagAttach(id, tagId);
+        return Result.success();
+    }
+
+    @DeleteMapping("/{id}/tags/{tagId}")
+    public Result<Void> tagDetach(@PathVariable Long id, @PathVariable Long tagId) {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可移除标签");
+        ticketService.tagDetach(id, tagId);
         return Result.success();
     }
 

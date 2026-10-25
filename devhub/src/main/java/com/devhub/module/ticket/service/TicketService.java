@@ -9,6 +9,7 @@ import com.devhub.module.ticket.entity.SupportTicket;
 import com.devhub.module.ticket.entity.SupportTicketReply;
 import com.devhub.module.ticket.mapper.SupportTicketMapper;
 import com.devhub.module.ticket.mapper.SupportTicketReplyMapper;
+import com.devhub.module.ticket.mapper.TicketTagMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -37,18 +38,26 @@ public class TicketService {
     private final TicketAiService ticketAi;
     private final NotificationService notify;
     private final Executor qcExecutor;
+    private final SlaService slaService;
+    private final TicketAssignService assignService;
+    private final TicketTagMapper tagMapper;
 
     public TicketService(SupportTicketMapper ticketMapper, SupportTicketReplyMapper replyMapper,
                          TicketAiService ticketAi, NotificationService notify,
-                         @Qualifier("ticketQcExecutor") Executor qcExecutor) {
+                         @Qualifier("ticketQcExecutor") Executor qcExecutor,
+                         SlaService slaService, TicketAssignService assignService,
+                         TicketTagMapper tagMapper) {
         this.ticketMapper = ticketMapper;
         this.replyMapper = replyMapper;
         this.ticketAi = ticketAi;
         this.notify = notify;
         this.qcExecutor = qcExecutor;
+        this.slaService = slaService;
+        this.assignService = assignService;
+        this.tagMapper = tagMapper;
     }
 
-    /** 建单：落库 → 生成工单号 → AI 分类定级（失败降级 OTHER/MEDIUM，不阻断） */
+    /** 建单：落库 → 生成工单号 → AI 分类定级（失败降级 OTHER/MEDIUM，不阻断）→ SLA 双时钟 → 自动派单 */
     @Transactional(rollbackFor = Exception.class)
     public SupportTicket create(String username, String title, String content,
                                 String source, String conversationId, String messageId) {
@@ -76,18 +85,44 @@ public class TicketService {
             t.setPriority("MEDIUM");
         }
         ticketMapper.updateById(t);
-        return t;
+        // 重查拿 DB 回填字段（create_time 是 SLA 时钟的锚点，实体内存里没有）
+        SupportTicket fresh = ticketMapper.selectById(t.getId());
+        slaService.armClock(fresh, false);
+        assignService.autoAssign(fresh);
+        return fresh;
     }
 
-    /** 坐席视角分页（全部工单，可过滤） */
+    /**
+     * 坐席视角分页（全部工单，可过滤）。
+     * 快捷视图：unassigned=未分派 / risk=解决时钟 60 分钟内到期 / breached=已 SLA 超时 / mine=我处理中
+     */
     public Page<SupportTicket> page(long page, long size, String status, String category,
-                                    String priority, String keyword) {
-        return ticketMapper.selectPage(new Page<>(page, size), new LambdaQueryWrapper<SupportTicket>()
+                                    String priority, String keyword, String view) {
+        LambdaQueryWrapper<SupportTicket> w = new LambdaQueryWrapper<SupportTicket>()
                 .eq(notBlank(status), SupportTicket::getStatus, status)
                 .eq(notBlank(category), SupportTicket::getCategory, category)
                 .eq(notBlank(priority), SupportTicket::getPriority, priority)
-                .like(notBlank(keyword), SupportTicket::getTitle, keyword)
-                .orderByDesc(SupportTicket::getCreateTime));
+                .like(notBlank(keyword), SupportTicket::getTitle, keyword);
+        switch (view == null ? "" : view) {
+            case "unassigned" -> w.isNull(SupportTicket::getHandler)
+                    .eq(SupportTicket::getStatus, "PENDING");
+            case "risk" -> w.in(SupportTicket::getStatus, "PENDING", "PROCESSING")
+                    .eq(SupportTicket::getSlaBreach, 0)
+                    .isNull(SupportTicket::getSlaPausedAt)
+                    .lt(SupportTicket::getSlaResolveDue,
+                            java.time.LocalDateTime.now().plusMinutes(60));
+            case "breached" -> w.in(SupportTicket::getStatus, "PENDING", "PROCESSING")
+                    .eq(SupportTicket::getSlaBreach, 1);
+            case "mine" -> w.eq(SupportTicket::getHandler, currentUser())
+                    .in(SupportTicket::getStatus, "PENDING", "PROCESSING");
+            default -> { }
+        }
+        return ticketMapper.selectPage(new Page<>(page, size), w.orderByDesc(SupportTicket::getCreateTime));
+    }
+
+    private String currentUser() {
+        return org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getName();
     }
 
     /** 客户视角：只看自己的 */
@@ -97,7 +132,7 @@ public class TicketService {
                 .orderByDesc(SupportTicket::getCreateTime));
     }
 
-    /** 详情（含往来回复）：发起人或坐席（管理员）可看 */
+    /** 详情（含往来回复）：发起人或坐席（管理员）可看；客户视角隐藏内部备注 */
     public Map<String, Object> detail(Long id, String username, boolean admin) {
         SupportTicket t = ticketMapper.selectById(id);
         if (t == null) throw new BusinessException(404, "工单不存在");
@@ -105,16 +140,23 @@ public class TicketService {
         List<SupportTicketReply> replies = replyMapper.selectList(
                 new LambdaQueryWrapper<SupportTicketReply>()
                         .eq(SupportTicketReply::getTicketId, id)
+                        .ne(!admin, SupportTicketReply::getRole, "internal")
                         .orderByAsc(SupportTicketReply::getCreateTime));
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("ticket", t);
         vo.put("replies", replies);
+        vo.put("tags", tagsOf(List.of(id)).getOrDefault(id, List.of()));
         return vo;
     }
 
-    /** 受理：CAS PENDING→PROCESSING，并发受理只有一个成功 */
+    /** 受理：CAS PENDING→PROCESSING，并发受理只有一个成功；已分派给他人的单需转派后处理 */
     @Transactional(rollbackFor = Exception.class)
     public SupportTicket take(Long id, String handler) {
+        SupportTicket t = ticketMapper.selectById(id);
+        if (t == null) throw new BusinessException(404, "工单不存在");
+        if (t.getHandler() != null && !t.getHandler().isBlank() && !t.getHandler().equals(handler)) {
+            throw new BusinessException(409, "该工单已分派给 " + t.getHandler() + "，如需接管请先转派");
+        }
         int rows = ticketMapper.update(null, new LambdaUpdateWrapper<SupportTicket>()
                 .eq(SupportTicket::getId, id)
                 .eq(SupportTicket::getStatus, "PENDING")
@@ -124,18 +166,26 @@ public class TicketService {
         return ticketMapper.selectById(id);
     }
 
-    /** 回复：客户补充或坐席沟通（CLOSED 后不可再回复） */
+    /** 回复：customer/agent 沟通 + agent internal 内部备注（CLOSED 后不可再回复）。
+     *  SLA 钩子：客户回复暂停解决时钟；坐席回复收口暂停并记首响。 */
     @Transactional(rollbackFor = Exception.class)
     public void reply(Long id, String author, String role, String content) {
         SupportTicket t = ticketMapper.selectById(id);
         if (t == null) throw new BusinessException(404, "工单不存在");
         if ("CLOSED".equals(t.getStatus())) throw new BusinessException("工单已关闭，无法回复");
+        if (!"customer".equals(role) && !"agent".equals(role) && !"internal".equals(role))
+            throw new BusinessException("非法回复角色");
         insertReply(id, author, role, content);
-        if ("customer".equals(role) && t.getHandler() != null) {
-            notify.push(t.getHandler(), "ticket", "客户补充了工单信息", t.getTitle(), "/#/tickets");
+        if ("customer".equals(role)) {
+            slaService.onCustomerReply(t);
+            if (t.getHandler() != null) {
+                notify.push(t.getHandler(), "ticket", "客户补充了工单信息", t.getTitle(), "/#/tickets");
+            }
         } else if ("agent".equals(role)) {
+            slaService.onAgentReply(t);
             notify.push(t.getUsername(), "ticket", "工单有新回复", t.getTitle(), "/#/ticket/mine");
         }
+        // internal 备注：坐席内部可见，不通知客户、不动 SLA 时钟
     }
 
     private void insertReply(Long id, String author, String role, String content) {
@@ -160,6 +210,7 @@ public class TicketService {
                 .set(SupportTicket::getHandler, handler)
                 .set(SupportTicket::getQcScore, null));
         if (rows == 0) throw new BusinessException(409, "仅处理中的工单可结单，请刷新");
+        slaService.onTerminal(id);
         // 结单说明静默落为坐席回复（避免与结单通知重复打扰发起人）
         insertReply(id, handler, "agent", resolution == null || resolution.isBlank() ? "已处理完成" : resolution);
         notify.push(t.getUsername(), "ticket", "你的工单已解决，欢迎评价", t.getTitle(), "/#/ticket/mine");
@@ -183,6 +234,69 @@ public class TicketService {
                 .eq(SupportTicket::getStatus, "RESOLVED")
                 .set(SupportTicket::getStatus, "CLOSED"));
         if (rows == 0) throw new BusinessException(409, "仅已解决的工单可关闭");
+        slaService.onTerminal(id);
+    }
+
+    // ==================== 标签 ====================
+
+    public List<com.devhub.module.ticket.entity.TicketTag> tagList() {
+        return tagMapper.selectList(new LambdaQueryWrapper<com.devhub.module.ticket.entity.TicketTag>()
+                .orderByAsc(com.devhub.module.ticket.entity.TicketTag::getId));
+    }
+
+    public com.devhub.module.ticket.entity.TicketTag tagCreate(String name, String color) {
+        if (name == null || name.isBlank()) throw new BusinessException("标签名不能为空");
+        Long cnt = tagMapper.selectCount(new LambdaQueryWrapper<com.devhub.module.ticket.entity.TicketTag>()
+                .eq(com.devhub.module.ticket.entity.TicketTag::getName, name.strip()));
+        if (cnt != null && cnt > 0) throw new BusinessException(409, "标签已存在");
+        com.devhub.module.ticket.entity.TicketTag tag = new com.devhub.module.ticket.entity.TicketTag();
+        tag.setName(name.strip());
+        tag.setColor(color == null || color.isBlank() ? "#0071e3" : color);
+        tagMapper.insert(tag);
+        return tag;
+    }
+
+    public void tagDelete(Long id) {
+        tagMapper.deleteById(id);
+        tagMapper.detachByTag(id);
+    }
+
+    public void tagAttach(Long ticketId, Long tagId) {
+        SupportTicket t = ticketMapper.selectById(ticketId);
+        if (t == null) throw new BusinessException(404, "工单不存在");
+        tagMapper.attach(ticketId, tagId);
+    }
+
+    public void tagDetach(Long ticketId, Long tagId) {
+        tagMapper.detach(ticketId, tagId);
+    }
+
+    /** 批量取工单标签（列表页展示） */
+    public Map<Long, List<Map<String, Object>>> tagsOf(List<Long> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) return Map.of();
+        String ids = String.join(",", ticketIds.stream().map(String::valueOf).toList());
+        List<Map<String, Object>> rows = tagMapper.tagsOfTickets(ids);
+        Map<Long, List<Map<String, Object>>> m = new LinkedHashMap<>();
+        for (Map<String, Object> r : rows) {
+            Long tid = ((Number) r.get("ticketId")).longValue();
+            m.computeIfAbsent(tid, k -> new java.util.ArrayList<>()).add(r);
+        }
+        return m;
+    }
+
+    /** 列表页：工单 + 标签合并视图 */
+    public Map<String, Object> pageWithTags(long page, long size, String status, String category,
+                                            String priority, String keyword, String view) {
+        Page<SupportTicket> p = page(page, size, status, category, priority, keyword, view);
+        Map<Long, List<Map<String, Object>>> tags = tagsOf(
+                p.getRecords().stream().map(SupportTicket::getId).toList());
+        Map<String, Object> vo = new LinkedHashMap<>();
+        vo.put("records", p.getRecords());
+        vo.put("tags", tags);
+        vo.put("total", p.getTotal());
+        vo.put("current", p.getCurrent());
+        vo.put("size", p.getSize());
+        return vo;
     }
 
     /** 满意度：仅发起人、仅已解决/已关闭、仅一次 */
@@ -245,6 +359,7 @@ public class TicketService {
         vo.put("trend7d", ticketMapper.trend7d());
         vo.put("satisfactionDist", ticketMapper.countBySatisfaction());
         vo.put("qcDone", ticketMapper.qcDoneCount());
+        vo.put("views", ticketMapper.viewStats());
         return vo;
     }
 

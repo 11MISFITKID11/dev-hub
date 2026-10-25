@@ -40,6 +40,18 @@ public class SupportTicket {
     private Integer version;
     @TableLogic
     private Integer deleted;
+    /** SLA 首响截止 */
+    private LocalDateTime slaFirstDue;
+    /** SLA 解决截止（不含暂停顺延，生效值见 SlaClock.effectiveResolveDue） */
+    private LocalDateTime slaResolveDue;
+    /** 实际首响时间（坐席首次回复） */
+    private LocalDateTime slaFirstAt;
+    /** 是否已发生 SLA 超时（超时升级后置 1，防重复升级） */
+    private Integer slaBreach;
+    /** 等待客户回复累计暂停毫秒 */
+    private Long slaPauseMs;
+    /** 当前暂停起点（NULL=计时中） */
+    private LocalDateTime slaPausedAt;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

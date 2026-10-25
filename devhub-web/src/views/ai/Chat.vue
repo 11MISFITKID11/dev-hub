@@ -28,9 +28,10 @@
             <div v-if="m.role === 'USER'" style="white-space:pre-wrap">{{ m.content }}</div>
             <template v-else>
               <div class="md" v-html="m.html"></div>
-              <div v-if="m.messageId && !streaming" style="margin-top:6px; display:flex; gap:6px; font-size:13px">
+              <div v-if="m.messageId && !streaming" style="margin-top:6px; display:flex; gap:6px; font-size:13px; align-items:center">
                 <span class="fb" :class="{ on: m.feedback === 1 }" title="有用" @click="vote(m, 1)">👍</span>
                 <span class="fb" :class="{ on: m.feedback === -1 }" title="无用，将记录知识缺口" @click="vote(m, -1)">👎</span>
+                <span v-if="m.refused" class="tk-btn" @click="openTicketDlg(m, 'chat_refusal')">转工单 · 人工跟进</span>
               </div>
             </template>
           </div>
@@ -59,11 +60,25 @@
     <el-drawer v-model="srcDrawer" :title="srcOpen && srcOpen.fileName" size="35%">
       <div style="font-size:13px; line-height:1.8; white-space:pre-wrap">{{ srcOpen && srcOpen.content }}</div>
     </el-drawer>
+
+    <!-- 转工单（拒答/点踩 → 人工闭环） -->
+    <el-dialog v-model="tkDlg" title="转人工工单" width="520px">
+      <el-form label-width="48px">
+        <el-form-item label="标题"><el-input v-model="tkForm.title" maxlength="100" /></el-form-item>
+        <el-form-item label="内容"><el-input v-model="tkForm.content" type="textarea" :rows="7" /></el-form-item>
+      </el-form>
+      <div style="font-size:12px;color:var(--el-text-color-secondary)">提交后 AI 自动分类定级，坐席将在知识库辅助下人工处理。</div>
+      <template #footer>
+        <el-button @click="tkDlg = false">取消</el-button>
+        <el-button type="primary" :loading="tkCreating" @click="submitTicket">提交工单</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ChatDotRound } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 defineOptions({ name: 'ChatPage' })
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { marked } from 'marked'
@@ -100,6 +115,34 @@ async function vote(m, v) {
   if (m.feedback === v) return
   await api.post(`/v1/chat/messages/${m.messageId}/feedback`, { value: v })
   m.feedback = v
+  if (v === -1) {
+    // 点踩 = 知识缺口已记录；顺势引导转人工工单，闭环进入人工侧
+    ElMessageBox.confirm('已记录知识缺口。要转人工工单跟进这个问题吗？', '转工单', { type: 'info' })
+      .then(() => openTicketDlg(m, 'chat_dislike')).catch(() => {})
+  }
+}
+/* ---- 转工单（拒答/点踩 → 人工闭环） ---- */
+const tkDlg = ref(false), tkForm = ref({}), tkFrom = ref(null), tkCreating = ref(false)
+function openTicketDlg(m, source) {
+  tkFrom.value = m
+  tkForm.value = {
+    title: (m.question || '').slice(0, 60),
+    content: (m.question || '') + '\n\n—— AI 回答（' + (source === 'chat_refusal' ? '拒答' : '被判无用') + '）：\n' + (m.content || '').slice(0, 400)
+  }
+  tkForm.value.source = source
+  tkDlg.value = true
+}
+async function submitTicket() {
+  tkCreating.value = true
+  try {
+    await api.post('/v1/tickets', {
+      ...tkForm.value,
+      conversationId: cur.value && cur.value.id,
+      messageId: tkFrom.value && tkFrom.value.messageId
+    })
+    ElMessage.success('已转工单，可在「我的工单」跟进处理进度')
+    tkDlg.value = false
+  } finally { tkCreating.value = false }
 }
 function scrollBottom() { nextTick(() => { if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight }) }
 
@@ -108,7 +151,7 @@ async function send() {
   if (!q || streaming.value) return
   input.value = ''
   msgs.value.push({ role: 'USER', content: q })
-  const aiMsg = { role: 'ASSISTANT', content: '', html: '', sources: [] }
+  const aiMsg = { role: 'ASSISTANT', content: '', html: '', sources: [], question: q }
   msgs.value.push(aiMsg)
   streaming.value = true; ctrl.value = new AbortController()
   scrollBottom()
@@ -145,6 +188,7 @@ async function send() {
           }
           aiMsg.sources = meta.sources || []
           aiMsg.messageId = meta.messageId
+          aiMsg.refused = !!meta.refused
         } else {
           raw += data
           if (!renderTick) {
@@ -177,6 +221,12 @@ onMounted(loadConvs)
 .fb { cursor:pointer; opacity:.45; transition:opacity .15s ease; user-select:none }
 .fb:hover { opacity:.9 }
 .fb.on { opacity:1; transform:scale(1.15) }
+.tk-btn {
+  cursor:pointer; font-size:12px; color:var(--el-color-primary);
+  border:1px solid var(--el-color-primary-light-7); border-radius:999px; padding:1px 10px;
+  transition: color .15s ease, background-color .15s ease;
+}
+.tk-btn:hover { background:var(--el-color-primary-light-9) }
 .sug-chip {
   padding: 7px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
   background: var(--dh-glass-bg); border: 1px solid var(--dh-glass-border, rgba(255,255,255,.55));

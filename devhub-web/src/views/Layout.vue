@@ -84,7 +84,8 @@ const titleMap = {
   '/dashboard': '工作台', '/project': '项目管理', '/task': '任务中心', '/defect': '缺陷跟踪',
   '/doc': '文档中心', '/requirement': '需求管理', '/report': '报表统计', '/metrics': '效能度量', '/system': '系统管理',
   '/ai/chat': '知识中枢 · 对话问答', '/ai/history': '知识中枢 · 会话历史',
-  '/ai/ops': '知识中枢 · 知识运营', '/ai/eval': '知识中枢 · AI 评测'
+  '/ai/ops': '知识中枢 · 知识运营', '/ai/eval': '知识中枢 · AI 评测',
+  '/tickets': '知识中枢 · 工单中心', '/ticket/mine': '知识中枢 · 我的工单'
 }
 const currentTitle = computed(() => titleMap[route.path] || 'DevHub')
 

@@ -20,7 +20,9 @@ const routes = [
       { path: 'ai/chat', component: () => import('../views/ai/Chat.vue') },
       { path: 'ai/history', component: () => import('../views/ai/History.vue') },
       { path: 'ai/ops', component: () => import('../views/ai/Ops.vue') },
-      { path: 'ai/eval', component: () => import('../views/ai/AiEval.vue') }
+      { path: 'ai/eval', component: () => import('../views/ai/AiEval.vue') },
+      { path: 'tickets', component: () => import('../views/ticket/Tickets.vue') },
+      { path: 'ticket/mine', component: () => import('../views/ticket/MyTickets.vue') }
     ]
   },
   // 404 兜底（须放在最后）

@@ -375,6 +375,8 @@ public class AgentOrchestrator {
             metaInfo.put("messageId", assistantMsgId);
             metaInfo.put("sources", sources);
             metaInfo.put("thinkingSteps", steps);
+            // 检索门控未过（无资料支撑）：前端据此展示"转人工工单"入口，闭环进入人工侧
+            metaInfo.put("refused", request.isEnableRag() && ragContext.isBlank());
             meta = Flux.just("__META__" + objectMapper.writeValueAsString(metaInfo));
         } catch (Exception ignored) {
         }

@@ -1,6 +1,7 @@
 package com.devhub.module.ticket.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.devhub.common.RequirePerm;
 import com.devhub.module.ai.common.Result;
 import com.devhub.module.ticket.entity.SupportTicket;
 import com.devhub.module.ticket.service.TicketAssignService;
@@ -91,7 +92,8 @@ public class TicketController {
         return Result.success(ticketService.take(id, me()));
     }
 
-    /** 转派：仅管理员 */
+    /** 转派：仅管理员 + ticket:transfer 权限点 */
+    @RequirePerm("ticket:transfer")
     @PostMapping("/{id}/transfer")
     public Result<SupportTicket> transfer(@PathVariable Long id, @RequestBody Map<String, String> body) {
         if (!isAdmin()) return Result.fail(403, "仅管理员可转派");
@@ -154,6 +156,7 @@ public class TicketController {
     }
 
     /** 手动（重）质检：异步质检失败或需要复核时触发 */
+    @com.devhub.common.RequirePerm("ticket:qc")
     @PostMapping("/{id}/qc")
     public Result<Void> qc(@PathVariable Long id) {
         ticketService.runQc(id);

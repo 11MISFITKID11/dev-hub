@@ -111,7 +111,7 @@ import { useUserStore } from '../stores/user'
 import NotificationBell from '../components/NotificationBell.vue'
 import ProfileDialog from '../components/ProfileDialog.vue'
 import GlobalSearch from '../components/GlobalSearch.vue'
-import { ChatDotRound, Folder, Odometer, DataAnalysis, Setting, Service } from '@element-plus/icons-vue'
+import { ChatDotRound, Folder, Odometer, DataAnalysis, Setting, Service, Tickets } from '@element-plus/icons-vue'
 
 const store = useUserStore()
 const route = useRoute(), router = useRouter()
@@ -130,6 +130,7 @@ const portalTabs = [
 // 一级菜单图标（按菜单名映射；markRaw 避免组件被响应式代理）
 const menuIcons = {
   '智能客服': markRaw(ChatDotRound),
+  '工单服务': markRaw(Tickets),
   '知识库': markRaw(Folder),
   '工作台': markRaw(Odometer),
   '运营报表': markRaw(DataAnalysis),

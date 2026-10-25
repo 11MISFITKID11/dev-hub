@@ -50,6 +50,8 @@ public class ModelAdminController {
             item.put("isPrimary", cfg.getIsPrimary());
             item.put("remark", cfg.getRemark());
             item.put("updateTime", cfg.getUpdateTime());
+            item.put("modelType", "embedding".equalsIgnoreCase(cfg.getModelType()) ? "embedding" : "chat");
+            item.put("dimensions", cfg.getDimensions());
             item.put("keySource", keySource(cfg));
             item.put("active", registry.has(cfg.getName()));
             rows.add(item);
@@ -70,6 +72,10 @@ public class ModelAdminController {
         if (mapper.selectCount(new LambdaQueryWrapper<AiModelConfig>().eq(AiModelConfig::getName, body.getName())) > 0) {
             return Result.fail(409, "模型别名已存在: " + body.getName());
         }
+        String modelType = nvl(body.getModelType(), "chat");
+        if (!modelType.equals("chat") && !modelType.equals("embedding")) {
+            return Result.fail(400, "modelType 只能为 chat 或 embedding");
+        }
         AiModelConfig cfg = AiModelConfig.builder()
                 .name(body.getName().trim())
                 .provider(nvl(body.getProvider(), "other"))
@@ -80,6 +86,8 @@ public class ModelAdminController {
                 .maxTokens(body.getMaxTokens() != null ? body.getMaxTokens() : 4096)
                 .enabled(1)
                 .isPrimary(0)
+                .modelType(modelType)
+                .dimensions(body.getDimensions())
                 .remark(body.getRemark())
                 .build();
         mapper.insert(cfg);
@@ -167,6 +175,10 @@ public class ModelAdminController {
 
     private String keySource(AiModelConfig cfg) {
         if (cfg.getApiKey() != null && !cfg.getApiKey().isBlank()) return "db";
+        if ("embedding".equalsIgnoreCase(cfg.getModelType())) {
+            String envKey = properties.getEmbedding().getApiKey();
+            return envKey != null && !envKey.isBlank() ? "env" : "none";
+        }
         LlmProperties.ModelSpec env = properties.getModels().get(cfg.getName());
         return env != null && env.getApiKey() != null && !env.getApiKey().isBlank() ? "env" : "none";
     }
@@ -191,6 +203,8 @@ public class ModelAdminController {
     @Data
     public static class ModelConfigBody {
         private String name;
+        private String modelType;
+        private Integer dimensions;
         private String provider;
         private String model;
         private String baseUrl;

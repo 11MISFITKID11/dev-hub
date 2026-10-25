@@ -102,6 +102,92 @@ public class SystemController {
         return Result.success(grouped);
     }
 
+    /** 字典明细（含 id，管理维护用） */
+    @GetMapping("/dicts/list")
+    @PreAuthorize("hasAuthority('system:manage')")
+    public Result<List<SysDictData>> dictList(@RequestParam(required = false) String type) {
+        return Result.success(dictMapper.selectList(new LambdaQueryWrapper<SysDictData>()
+                .eq(type != null && !type.isBlank(), SysDictData::getType, type)
+                .orderByAsc(SysDictData::getType).orderByAsc(SysDictData::getSort)));
+    }
+
+    /** 新增字典项（工单分类等业务字典维护入口） */
+    @OperLog(module = "系统管理", action = "新增字典")
+    @PostMapping("/dicts")
+    @PreAuthorize("hasAuthority('system:manage')")
+    public Result<SysDictData> addDict(@RequestBody DictBody body) {
+        if (body.getType() == null || body.getLabel() == null || body.getValue() == null) {
+            return Result.fail(400, "type/label/value 不能为空");
+        }
+        Long cnt = dictMapper.selectCount(new LambdaQueryWrapper<SysDictData>()
+                .eq(SysDictData::getType, body.getType()).eq(SysDictData::getValue, body.getValue()));
+        if (cnt != null && cnt > 0) return Result.fail(409, "该类型下已存在相同取值: " + body.getValue());
+        SysDictData d = new SysDictData();
+        d.setType(body.getType().trim());
+        d.setLabel(body.getLabel().trim());
+        d.setValue(body.getValue().trim());
+        d.setSort(body.getSort() == null ? 99 : body.getSort());
+        dictMapper.insert(d);
+        return Result.success(d);
+    }
+
+    @OperLog(module = "系统管理", action = "修改字典")
+    @PutMapping("/dicts/{id}")
+    @PreAuthorize("hasAuthority('system:manage')")
+    public Result<String> updateDict(@PathVariable Long id, @RequestBody DictBody body) {
+        SysDictData d = dictMapper.selectById(id);
+        if (d == null) return Result.fail(404, "字典项不存在");
+        if (body.getLabel() != null) d.setLabel(body.getLabel().trim());
+        if (body.getSort() != null) d.setSort(body.getSort());
+        dictMapper.updateById(d);
+        return Result.success("已保存");
+    }
+
+    @OperLog(module = "系统管理", action = "删除字典")
+    @DeleteMapping("/dicts/{id}")
+    @PreAuthorize("hasAuthority('system:manage')")
+    public Result<String> delDict(@PathVariable Long id) {
+        dictMapper.deleteById(id);
+        return Result.success("已删除");
+    }
+
+    @Data
+    public static class DictBody {
+        private String type;
+        private String label;
+        private String value;
+        private Integer sort;
+    }
+
+    // ---------- 个人资料 ----------
+    @GetMapping("/profile")
+    public Result<Map<String, Object>> profile() {
+        String me = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getName();
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT username, nickname, create_time FROM sys_user WHERE username = ? AND deleted = 0", me);
+        List<String> roles = jdbc.queryForList(
+                "SELECT r.role_key FROM sys_role r JOIN sys_user_role ur ON ur.role_id = r.id WHERE ur.username = ?",
+                String.class, me);
+        Map<String, Object> vo = new LinkedHashMap<>();
+        vo.put("username", row.get("username"));
+        vo.put("nickname", row.get("nickname"));
+        vo.put("createTime", row.get("create_time"));
+        vo.put("roles", roles);
+        return Result.success(vo);
+    }
+
+    @OperLog(module = "个人中心", action = "修改昵称")
+    @PutMapping("/profile")
+    public Result<String> updateNickname(@RequestBody Map<String, String> body) {
+        String me = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getName();
+        String nickname = body.get("nickname");
+        if (nickname != null && nickname.length() > 32) return Result.fail(400, "昵称过长（≤32 字）");
+        jdbc.update("UPDATE sys_user SET nickname = ? WHERE username = ?", nickname, me);
+        return Result.success("已保存");
+    }
+
     // ---------- 操作日志 / 登录日志 ----------
     @PreAuthorize("hasAuthority('system:manage')")
     @GetMapping("/logs/oper")

@@ -34,11 +34,43 @@
     </el-card>
 
     <el-card shadow="never">
-      <template #header>字典</template>
-      <div v-for="(vs, k) in store.dicts" :key="k" style="font-size:12.5px; margin:6px 0">
-        <b>{{ k }}</b>：{{ vs.map(v => v.label).join(' / ') }}
+      <template #header>
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <span>字典（工单分类等业务字典）</span>
+          <el-button size="small" type="primary" plain @click="dDlg = true; dForm = { type: 'ticket_category', sort: 99 }">新增字典项</el-button>
+        </div>
+      </template>
+      <el-table :data="dictRows" size="small" v-loading="dLoading">
+        <el-table-column prop="type" label="类型" width="140" />
+        <el-table-column prop="label" label="显示名" width="110" />
+        <el-table-column prop="value" label="取值" width="110" />
+        <el-table-column prop="sort" label="排序" width="70" align="center" />
+        <el-table-column label="操作" width="120">
+          <template #default="s">
+            <el-button link type="primary" size="small" @click="editDict(s.row)">改显示名</el-button>
+            <el-button link type="danger" size="small" @click="delDict(s.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div style="margin-top:8px; font-size:12px; color:var(--el-text-color-secondary)">
+        工单分类字典（ticket_category）变更后，AI 分类提示词与校验集即时生效；已建工单不受影响。
       </div>
     </el-card>
+
+    <el-dialog v-model="dDlg" title="字典项" width="420px">
+      <el-form label-width="76px">
+        <el-form-item label="类型">
+          <el-input v-model="dForm.type" :disabled="!!dForm.id" placeholder="如 ticket_category" />
+        </el-form-item>
+        <el-form-item label="显示名"><el-input v-model="dForm.label" placeholder="如 数据安全" /></el-form-item>
+        <el-form-item label="取值"><el-input v-model="dForm.value" :disabled="!!dForm.id" placeholder="如 SECURITY（建议大写英文）" /></el-form-item>
+        <el-form-item label="排序"><el-input-number v-model="dForm.sort" :min="0" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dDlg = false">取消</el-button>
+        <el-button type="primary" :loading="dSaving" @click="saveDict">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-card shadow="never" style="grid-column:1/-1">
       <template #header>最近操作日志</template>
@@ -102,6 +134,30 @@ const uDlg = ref(false), uForm = ref({}), rpDlg = ref(false), rpUser = ref(''), 
 const pwdDlg = ref(false), pwd = ref({})
 const permDlg = ref(false), allMenus = ref([]), permRole = ref(null)
 const uRef = ref(null), saving = ref(false)
+
+/* 字典维护（工单分类等） */
+const dictRows = ref([]), dLoading = ref(false), dDlg = ref(false), dForm = ref({}), dSaving = ref(false)
+async function loadDicts() {
+  dLoading.value = true
+  try { dictRows.value = (await api.get('/system/dicts/list')) || [] } finally { dLoading.value = false }
+}
+function editDict(row) { dForm.value = { ...row }; dDlg.value = true }
+async function saveDict() {
+  const f = dForm.value
+  if (!f.type || !f.label || !f.value) { ElMessage.warning('类型/显示名/取值必填'); return }
+  dSaving.value = true
+  try {
+    if (f.id) await api.put(`/system/dicts/${f.id}`, { label: f.label, sort: f.sort })
+    else await api.post('/system/dicts', f)
+    ElMessage.success('已保存，业务侧即时生效')
+    dDlg.value = false; loadDicts(); store.loadDicts()
+  } finally { dSaving.value = false }
+}
+async function delDict(row) {
+  await ElMessageBox.confirm(`删除字典项「${row.label}（${row.value}）」？已引用它的历史数据不受影响。`, '删除', { type: 'warning' })
+  await api.delete(`/system/dicts/${row.id}`)
+  ElMessage.success('已删除'); loadDicts(); store.loadDicts()
+}
 const uRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入初始密码', trigger: 'blur' }, { min: 6, message: '至少 6 位', trigger: 'blur' }],
@@ -156,6 +212,7 @@ async function loadAll() {
   try { roles.value = await api.get('/system/roles') } catch (e) {}
   try { deptTree.value = await api.get('/system/depts') } catch (e) {}
   try { opLogs.value = (await api.get('/system/logs/oper', { params: { size: 8 } })).records || [] } catch (e) {}
+  loadDicts()
 }
 onMounted(loadAll)
 </script>

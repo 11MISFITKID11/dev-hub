@@ -31,6 +31,10 @@ public class AiModelConfig {
     private String baseUrl;
     /** 留空 = 继承环境变量 */
     private String apiKey;
+    /** chat=对话模型 embedding=向量模型 */
+    private String modelType;
+    /** 向量维度（embedding 专用，须与 Milvus 集合一致） */
+    private Integer dimensions;
     private Double temperature;
     private Integer maxTokens;
     private Integer enabled;

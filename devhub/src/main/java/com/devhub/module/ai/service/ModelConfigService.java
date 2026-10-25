@@ -50,7 +50,7 @@ public class ModelConfigService {
     }
 
     /**
-     * 计算环境变量 + DB 的最终生效配置（不触发重建）
+     * 计算环境变量 + DB 的最终生效配置（不触发重建）。chat 行叠加进 specs；embedding 行单独解析。
      */
     public Effective computeEffective() {
         Map<String, LlmProperties.ModelSpec> specs = new LinkedHashMap<>();
@@ -59,6 +59,7 @@ public class ModelConfigService {
         String primary = properties.getPrimary();
         List<AiModelConfig> rows = listAll();
         for (AiModelConfig row : rows) {
+            if (isEmbedding(row)) continue; // 向量模型单独解析（见 embeddingSpec）
             if (row.getEnabled() == 0) {
                 specs.remove(row.getName());
                 continue;
@@ -85,7 +86,7 @@ public class ModelConfigService {
         }
         for (AiModelConfig row : rows) {
             String name = row.getName();
-            if (row.getEnabled() == 1 && specs.containsKey(name)
+            if (!isEmbedding(row) && row.getEnabled() == 1 && specs.containsKey(name)
                     && !fallback.contains(name) && !name.equals(primary)) {
                 fallback.add(name);
             }
@@ -93,8 +94,29 @@ public class ModelConfigService {
         return new Effective(specs, primary, fallback);
     }
 
+    /** 解析生效的向量模型配置：第一个启用的 embedding 行（库内 key 优先，留空继承环境变量 key）；无可用行返回 null 保持现状 */
+    public EmbeddingSpec effectiveEmbedding() {
+        LlmProperties.EmbeddingSpec env = properties.getEmbedding();
+        AiModelConfig row = listAll().stream()
+                .filter(this::isEmbedding)
+                .filter(r -> r.getEnabled() == 1)
+                .findFirst().orElse(null);
+        if (row == null) return null;
+        String apiKey = notBlank(row.getApiKey()) ? row.getApiKey() : env.getApiKey();
+        if (!notBlank(apiKey)) return null;
+        return new EmbeddingSpec(
+                notBlank(row.getBaseUrl()) ? row.getBaseUrl() : env.getBaseUrl(),
+                apiKey,
+                notBlank(row.getModel()) ? row.getModel() : env.getModel(),
+                row.getDimensions() != null ? row.getDimensions() : env.getDimensions());
+    }
+
+    private boolean isEmbedding(AiModelConfig row) {
+        return "embedding".equalsIgnoreCase(row.getModelType());
+    }
+
     /**
-     * 应用叠加并热重建注册中心；返回 null 表示成功，否则为失败原因（保持原注册表不变）
+     * 应用叠加并热重建注册中心（对话模型表 + 向量模型）；返回 null 表示成功，否则为失败原因（保持原注册表不变）
      */
     public synchronized String applyOverlay() {
         Effective eff = computeEffective();
@@ -108,6 +130,14 @@ public class ModelConfigService {
             return "无可用主模型（未配置密钥），已保持现有配置";
         }
         registry.rebuild(eff.specs(), primary, eff.fallback());
+        try {
+            EmbeddingSpec emb = effectiveEmbedding();
+            if (emb != null) {
+                registry.rebuildEmbedding(emb.baseUrl(), emb.apiKey(), emb.model(), emb.dimensions());
+            }
+        } catch (Exception e) {
+            log.warn("向量模型重建失败，保持现有向量模型: {}", e.getMessage());
+        }
         return null;
     }
 
@@ -128,5 +158,9 @@ public class ModelConfigService {
 
     /** 叠加计算结果：specs 已含最终参数与密钥 */
     public record Effective(Map<String, LlmProperties.ModelSpec> specs, String primary, List<String> fallback) {
+    }
+
+    /** 向量模型生效配置 */
+    public record EmbeddingSpec(String baseUrl, String apiKey, String model, Integer dimensions) {
     }
 }

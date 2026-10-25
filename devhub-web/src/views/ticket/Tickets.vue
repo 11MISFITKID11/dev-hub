@@ -122,10 +122,18 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
+import { useUserStore } from '../../stores/user'
 
 const STATUS = { PENDING: '待受理', PROCESSING: '处理中', RESOLVED: '已解决', CLOSED: '已关闭' }
 const STATUS_STYLE = { PENDING: 'warning', PROCESSING: 'primary', RESOLVED: 'success', CLOSED: 'info' }
-const CAT = { PRODUCT: '产品咨询', BUG: '缺陷故障', ACCOUNT: '账号权限', BILLING: '计费相关', USAGE: '使用帮助', OTHER: '其他' }
+// 工单分类字典驱动（系统管理-字典维护，登录时已随 store 加载），空时回退内置
+const catStore = useUserStore()
+const CAT_FALLBACK = { PRODUCT: '产品咨询', BUG: '缺陷故障', ACCOUNT: '账号权限', BILLING: '计费账单', USAGE: '使用帮助', OTHER: '其他' }
+const CAT = computed(() => {
+  const d = {}
+  ;((catStore.dicts || {}).ticket_category || []).forEach(x => { d[x.value] = x.label })
+  return Object.keys(d).length ? d : CAT_FALLBACK
+})
 const CAT_STYLE = { PRODUCT: 'info', BUG: 'danger', ACCOUNT: 'warning', BILLING: 'warning', USAGE: 'info', OTHER: 'info' }
 const PRI = { HIGH: '高', MEDIUM: '中', LOW: '低' }
 const PRI_STYLE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'info' }

@@ -20,7 +20,8 @@ const routes = [
       { path: 'tickets', component: () => import('../views/ticket/Tickets.vue') },
       { path: 'tickets/qc', component: () => import('../views/ticket/QcStats.vue') },
       { path: 'ticket/mine', component: () => import('../views/ticket/MyTickets.vue') },
-      { path: 'system/models', component: () => import('../views/system/ModelConfig.vue') }
+      { path: 'system/models', component: () => import('../views/system/ModelConfig.vue') },
+      { path: 'system/prompts', component: () => import('../views/system/PromptTemplates.vue') }
     ]
   },
   // 404 兜底（须放在最后）

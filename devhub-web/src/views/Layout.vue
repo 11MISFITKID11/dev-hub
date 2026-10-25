@@ -19,6 +19,7 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="profile">个人资料</el-dropdown-item>
               <el-dropdown-item command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -74,6 +75,7 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人资料</el-dropdown-item>
                 <el-dropdown-item command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -82,13 +84,14 @@
       </el-header>
       <el-main style="background: transparent; overflow-y: auto">
         <router-view v-slot="{ Component }">
-          <keep-alive :include="['Dashboard', 'DocCenter', 'ReportPage', 'MetricsPage', 'SystemPage', 'ChatPage', 'HistoryPage', 'OpsPage', 'TicketsPage', 'MyTicketsPage', 'FeedbackPage', 'QcStatsPage', 'ModelConfigPage']">
+          <keep-alive :include="['Dashboard', 'DocCenter', 'ReportPage', 'MetricsPage', 'SystemPage', 'ChatPage', 'HistoryPage', 'OpsPage', 'TicketsPage', 'MyTicketsPage', 'FeedbackPage', 'QcStatsPage', 'ModelConfigPage', 'PromptTemplatesPage']">
             <component :is="Component" />
           </keep-alive>
         </router-view>
       </el-main>
     </el-container>
   </el-container>
+  <ProfileDialog v-model="profileDlg" />
 </template>
 
 <script setup>
@@ -96,11 +99,13 @@ import { ref, computed, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import NotificationBell from '../components/NotificationBell.vue'
+import ProfileDialog from '../components/ProfileDialog.vue'
 import GlobalSearch from '../components/GlobalSearch.vue'
 import { ChatDotRound, Folder, Odometer, DataAnalysis, Setting, Service } from '@element-plus/icons-vue'
 
 const store = useUserStore()
 const route = useRoute(), router = useRouter()
+const profileDlg = ref(false)
 const collapsed = ref(localStorage.getItem('dh_collapsed') === '1')
 const dark = ref(localStorage.getItem('dh_theme') === 'dark')
 
@@ -124,7 +129,7 @@ const iconOf = name => menuIcons[name] || null
 
 const titleMap = {
   '/dashboard': '客服工作台',
-  '/doc': '知识库', '/report': '运营报表', '/system': '系统管理', '/system/models': '系统管理 · 模型配置',
+  '/doc': '知识库', '/report': '运营报表', '/system': '系统管理', '/system/models': '系统管理 · 模型配置', '/system/prompts': '系统管理 · Prompt 模板',
   '/ai/chat': '智能客服 · 智能问答', '/ai/history': '智能客服 · 会话记录',
   '/ai/ops': '智能客服 · 知识运营', '/ai/eval': '智能客服 · 质检回归',
   '/ai/feedback': '智能客服 · 会话评价',
@@ -140,6 +145,7 @@ function applyTheme(v) {
 applyTheme(dark.value)
 
 function onCmd(cmd) {
+  if (cmd === 'profile') profileDlg.value = true
   if (cmd === 'logout') { store.logout(); router.push('/login') }
 }
 </script>

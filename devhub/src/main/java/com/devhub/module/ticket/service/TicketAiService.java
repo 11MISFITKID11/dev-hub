@@ -30,18 +30,47 @@ public class TicketAiService {
     private final ModelRouter modelRouter;
     private final ChatModelRegistry modelRegistry;
     private final MultiRetriever multiRetriever;
+    private final com.devhub.module.ai.service.PromptTemplateService promptTemplates;
+    private final com.devhub.module.system.mapper.SysDictDataMapper dictMapper;
+
+    private static final String DEFAULT_CATEGORY_LINE =
+            "PRODUCT(产品咨询)、BUG(缺陷故障)、ACCOUNT(账号权限)、BILLING(计费相关)、USAGE(使用帮助)、OTHER(其他)";
+
+    /** 工单分类字典（sys_dict_data type=ticket_category）：提示词选项与校验集的单一事实源 */
+    private List<com.devhub.module.system.entity.SysDictData> categoryDict() {
+        try {
+            return dictMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<
+                            com.devhub.module.system.entity.SysDictData>()
+                    .eq(com.devhub.module.system.entity.SysDictData::getType, "ticket_category")
+                    .orderByAsc(com.devhub.module.system.entity.SysDictData::getSort));
+        } catch (Exception e) {
+            log.warn("工单分类字典读取失败，回退内置分类: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 分类校验集：字典优先，空则内置（字典维护入口见 系统管理-字典） */
+    public java.util.Set<String> categorySet() {
+        List<com.devhub.module.system.entity.SysDictData> dict = categoryDict();
+        if (dict.isEmpty()) return CATEGORIES;
+        java.util.Set<String> set = new java.util.LinkedHashSet<>();
+        dict.forEach(d -> set.add(d.getValue()));
+        set.add("OTHER"); // 兜底分类恒可用
+        return set;
+    }
 
     /** AI 分类定级结果；LLM 失败/输出不合法时返回 null，由调用方降级 */
     public ClassifyResult classify(String title, String content) {
-        String prompt = """
-                你是企业知识库客服系统的工单分类助手。请对工单进行分类和优先级判断。
-                分类只能从以下选一：PRODUCT(产品咨询)、BUG(缺陷故障)、ACCOUNT(账号权限)、BILLING(计费相关)、USAGE(使用帮助)、OTHER(其他)
-                优先级只能从以下选一：HIGH(阻断使用/严重影响)、MEDIUM(有影响可绕过)、LOW(咨询/建议)
-                只输出 JSON，不要输出任何其他文字，格式：{"category":"PRODUCT","priority":"MEDIUM","reason":"一句话理由"}
-
-                工单标题：%s
-                工单内容：%s
-                """.formatted(title, truncate(content, 800));
+        List<com.devhub.module.system.entity.SysDictData> dict = categoryDict();
+        String categoryLine = dict.isEmpty() ? DEFAULT_CATEGORY_LINE
+                : dict.stream().map(d -> d.getValue() + "(" + d.getLabel() + ")")
+                        .reduce((a, b) -> a + "、" + b).orElse(DEFAULT_CATEGORY_LINE);
+        java.util.Set<String> allowed = categorySet();
+        String prompt = promptTemplates.render(
+                com.devhub.module.ai.service.PromptTemplateService.SCENE_TICKET_CLASSIFY,
+                java.util.Map.of("categories", categoryLine,
+                        "title", title == null ? "" : title,
+                        "content", truncate(content, 800)));
         try {
             String out = modelRouter.call(prompt, null);
             String json = extractJson(out);
@@ -49,7 +78,7 @@ public class TicketAiService {
             var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
             String category = node.path("category").asText("").toUpperCase();
             String priority = node.path("priority").asText("").toUpperCase();
-            if (!CATEGORIES.contains(category) || !PRIORITIES.contains(priority)) return null;
+            if (!allowed.contains(category) || !PRIORITIES.contains(priority)) return null;
             return new ClassifyResult(category, priority, node.path("reason").asText(""));
         } catch (Exception e) {
             log.warn("工单 AI 分类失败，降级默认分类: {}", e.getMessage());
@@ -77,28 +106,20 @@ public class TicketAiService {
               .append(truncate(r.getContent(), 300)).append("\n\n");
         }
         String material = kb.isEmpty() ? "（知识库未检索到相关资料）" : kb.toString();
-        String prompt = """
-                你是客服坐席的回复助手。请根据知识库资料为下面的工单起草一条给客户的回复。
-                要求：礼貌专业、可直接发送、先给结论再给操作步骤、引用资料中的关键参数或命令；
-                不超过 300 字；若资料不足以解决工单问题，明确说明还需要客户补充什么信息，不要编造。
-
-                %s
-                工单标题：%s
-                工单内容：%s
-                """.formatted(material, ticket.getTitle(), truncate(ticket.getContent(), 600));
+        String prompt = promptTemplates.render(
+                com.devhub.module.ai.service.PromptTemplateService.SCENE_TICKET_SUGGEST,
+                java.util.Map.of("material", material,
+                        "title", ticket.getTitle() == null ? "" : ticket.getTitle(),
+                        "content", truncate(ticket.getContent(), 600)));
         return modelRouter.call(prompt, null).trim();
     }
 
     /** AI 质检：对已解决工单的坐席结单回复评分；失败返回 null（可手动重试） */
     public QcResult qc(SupportTicket ticket, String agentReplies) {
-        String prompt = """
-                你是客服团队的质检员。请对已解决工单中坐席的处理质量评分。
-                评分维度：完整性（是否正面解决工单问题）、礼貌性、专业性。总分 0-100，从严评分。
-                只输出 JSON，不要输出任何其他文字，格式：{"score":85,"problems":"无问题 或 具体问题描述"}
-
-                工单内容：%s
-                坐席回复全文：%s
-                """.formatted(truncate(ticket.getContent(), 800), truncate(agentReplies, 1200));
+        String prompt = promptTemplates.render(
+                com.devhub.module.ai.service.PromptTemplateService.SCENE_TICKET_QC,
+                java.util.Map.of("content", truncate(ticket.getContent(), 800),
+                        "agentReplies", truncate(agentReplies, 1200)));
         try {
             String out = modelRouter.call(prompt, null);
             String json = extractJson(out);

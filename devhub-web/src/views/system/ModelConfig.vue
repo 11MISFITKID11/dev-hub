@@ -5,7 +5,7 @@
         <div>
           <span>AI 模型配置</span>
           <span style="font-size:12px; color:var(--el-text-color-secondary); margin-left:10px">
-            变更后热生效（无需重启）· 密钥留空时继承环境变量，密钥不回显
+            变更后热生效（无需重启）· 密钥留空时继承环境变量，密钥不回显 · 向量模型维度须与 Milvus 集合一致
           </span>
         </div>
         <el-button type="primary" size="small" @click="openDlg()">新增模型</el-button>
@@ -13,13 +13,21 @@
     </template>
 
     <el-table :data="rows" v-loading="loading">
+      <el-table-column label="类型" width="76" align="center">
+        <template #default="s">
+          <el-tag :type="s.row.modelType === 'embedding' ? 'success' : 'primary'" size="small">
+            {{ s.row.modelType === 'embedding' ? '向量' : '对话' }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="name" label="别名" width="130">
         <template #default="s">
           {{ s.row.name }}
-          <el-tag v-if="s.row.name === primary" type="primary" size="small" style="margin-left:6px">主模型</el-tag>
+          <el-tag v-if="s.row.name === primary && s.row.modelType !== 'embedding'" type="primary" size="small" style="margin-left:6px">主模型</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="model" label="模型 ID" width="140" />
+      <el-table-column label="模型 ID" width="150">
+        <template #default="s">{{ s.row.model }}<span v-if="s.row.dimensions" class="dh-num" style="color:var(--el-text-color-secondary); font-size:11.5px"> · {{ s.row.dimensions }}d</span></template>
+      </el-table-column>
       <el-table-column prop="provider" label="供应商" width="90">
         <template #default="s">{{ s.row.provider }}</template>
       </el-table-column>
@@ -32,7 +40,10 @@
         </template>
       </el-table-column>
       <el-table-column label="温度" width="64" align="center">
-        <template #default="s"><span class="dh-num">{{ (s.row.temperature ?? 0.7).toFixed(1) }}</span></template>
+        <template #default="s">
+          <span v-if="s.row.modelType === 'embedding'" style="color:var(--el-text-color-placeholder)">—</span>
+          <span v-else class="dh-num">{{ (s.row.temperature ?? 0.7).toFixed(1) }}</span>
+        </template>
       </el-table-column>
       <el-table-column label="状态" width="130">
         <template #default="s">
@@ -44,7 +55,7 @@
       <el-table-column label="操作" width="170">
         <template #default="s">
           <el-button link type="primary" size="small" @click="openDlg(s.row)">编辑</el-button>
-          <el-button v-if="s.row.isPrimary !== 1" link type="success" size="small" @click="setPrimary(s.row)">设为主模型</el-button>
+          <el-button v-if="s.row.isPrimary !== 1 && s.row.modelType !== 'embedding'" link type="success" size="small" @click="setPrimary(s.row)">设为主模型</el-button>
           <el-button v-if="s.row.isPrimary !== 1" link type="danger" size="small" @click="del(s.row)">删除</el-button>
         </template>
       </el-table-column>
@@ -58,6 +69,12 @@
       <el-form label-width="88px">
         <el-form-item label="别名">
           <el-input v-model="form.name" :disabled="!!form.id" placeholder="如 glm-4-flash（路由用，唯一）" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="form.modelType" :disabled="!!form.id" style="width:180px">
+            <el-option value="chat" label="对话模型" />
+            <el-option value="embedding" label="向量模型" />
+          </el-select>
         </el-form-item>
         <el-form-item label="供应商">
           <el-select v-model="form.provider" style="width:180px">
@@ -79,7 +96,11 @@
             <span class="dh-num" style="width:24px">{{ form.temperature.toFixed(1) }}</span>
           </div>
         </el-form-item>
-        <el-form-item label="Max Tokens"><el-input-number v-model="form.maxTokens" :min="256" :max="32768" :step="256" /></el-form-item>
+        <el-form-item label="Max Tokens"><el-input-number v-model="form.maxTokens" :min="256" :max="32768" :step="256" :disabled="form.modelType === 'embedding'" /></el-form-item>
+        <el-form-item v-if="form.modelType === 'embedding'" label="向量维度">
+          <el-input-number v-model="form.dimensions" :min="256" :max="4096" :step="128" />
+          <span style="margin-left:8px; font-size:12px; color:var(--el-text-color-secondary)">须与 Milvus 集合维度一致</span>
+        </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" maxlength="120" /></el-form-item>
       </el-form>
       <template #footer>
@@ -112,8 +133,10 @@ async function load() {
 function openDlg(row) {
   form.value = row
     ? { id: row.id, name: row.name, provider: row.provider, model: row.model, baseUrl: row.baseUrl,
-        apiKey: '', temperature: row.temperature ?? 0.7, maxTokens: row.maxTokens ?? 4096, remark: row.remark }
-    : { id: null, name: '', provider: 'zhipu', model: '', baseUrl: '', apiKey: '', temperature: 0.7, maxTokens: 4096, remark: '' }
+        apiKey: '', temperature: row.temperature ?? 0.7, maxTokens: row.maxTokens ?? 4096,
+        modelType: row.modelType || 'chat', dimensions: row.dimensions ?? null, remark: row.remark }
+    : { id: null, name: '', provider: 'zhipu', model: '', baseUrl: '', apiKey: '', temperature: 0.7,
+        maxTokens: 4096, modelType: 'chat', dimensions: null, remark: '' }
   dlg.value = true
 }
 async function save() {

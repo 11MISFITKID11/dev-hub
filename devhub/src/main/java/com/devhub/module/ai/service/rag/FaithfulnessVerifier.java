@@ -28,26 +28,13 @@ public class FaithfulnessVerifier {
 
     private final ModelRouter modelRouter;
     private final MessageMapper messageMapper;
+    private final com.devhub.module.ai.service.PromptTemplateService promptTemplates;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${agent.rag.faithfulness-model:glm-4-flash}")
     private String verifierModel;
 
-    private static final String VERIFY_PROMPT = """
-            你是答案忠实度审核员。请把"答案"拆解为独立的事实性声明（ opinions/客套话/重述问题不算），
-            逐条判断其是否能从"参考资料"中找到支撑。
-
-            只输出 JSON（不要任何其他文字）：
-            {"claims": [{"text": "声明原文", "supported": true}, {"text": "...", "supported": false}]}
-
-            判定标准：资料中直接陈述或可直接推出 → true；资料中没有、与资料矛盾、或需要外部知识 → false。
-
-            参考资料（编号与答案中 [n] 对应）：
-            %s
-
-            答案：
-            %s
-            """;
+    // 校验提示词已迁移至 PromptTemplateService.SCENE_FAITHFULNESS
 
     /**
      * 同步校验，返回忠实度 [0,1]；解析失败返回 -1（未知，不计入统计）
@@ -58,7 +45,8 @@ public class FaithfulnessVerifier {
         }
         try {
             String context = buildContext(sources);
-            String prompt = String.format(VERIFY_PROMPT, context, answer);
+            String prompt = promptTemplates.render(com.devhub.module.ai.service.PromptTemplateService.SCENE_FAITHFULNESS,
+                    java.util.Map.of("context", context, "answer", answer));
             String output = modelRouter.call(prompt, verifierModel).trim();
 
             String json = extractJson(output);

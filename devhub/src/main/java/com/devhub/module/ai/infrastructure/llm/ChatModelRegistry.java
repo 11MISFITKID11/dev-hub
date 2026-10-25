@@ -39,7 +39,8 @@ public class ChatModelRegistry {
     private volatile Map<String, StreamingChatModel> streamingModels = new LinkedHashMap<>();
     private volatile String primaryName;
     private volatile List<String> fallbackChain = new ArrayList<>();
-    private EmbeddingModel embeddingModel;
+    /** 向量模型（DB 配置可热替换；null = 未注册） */
+    private volatile EmbeddingModel embeddingModel;
 
     public ChatModelRegistry(LlmProperties properties) {
         this.properties = properties;
@@ -138,6 +139,24 @@ public class ChatModelRegistry {
 
     public boolean embeddingEnabled() {
         return embeddingModel != null;
+    }
+
+    /**
+     * 热重建向量模型（模型配置页变更后调用）；密钥为空视为无效配置，保持现状并抛错由调用方提示。
+     */
+    public synchronized void rebuildEmbedding(String baseUrl, String apiKey, String model, Integer dimensions) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("向量模型密钥为空，无法启用（留空应继承环境变量，但环境变量也未配置）");
+        }
+        OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder builder = OpenAiEmbeddingModel.builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .modelName(model);
+        if (dimensions != null) {
+            builder.dimensions(dimensions);
+        }
+        this.embeddingModel = builder.build();
+        log.info("向量模型已重建: {} (dim={})", model, dimensions);
     }
 
     public ChatModel get(String name) {

@@ -25,29 +25,12 @@ public class QueryRewriteService {
 
     private final ModelRouter modelRouter;
     private final RedisCacheService cacheService;
+    private final com.devhub.module.ai.service.PromptTemplateService promptTemplates;
 
     private static final String CACHE_KEY_PREFIX = "rag:rewrite:";
     private static final Duration CACHE_TTL = Duration.ofHours(1);
 
-    private static final String REWRITE_PROMPT = """
-            你是搜索引擎查询优化器。请把用户的原始问题改写为更易命中企业知识库的检索查询，并判断问题类型。
-
-            要求：
-            1. normalized：纠正错别字、去掉口语化表达和语气词；如果提供了对话历史且当前问题含指代（它/这个/上述/那种），必须结合历史补全为完整独立的问题
-            2. variants：生成 2 个不同措辞风格的同义变体（一个偏正式术语、一个偏通俗）
-            3. english：normalized 的简洁英文翻译
-            4. type：判断问题类型
-               - exact：精确查找（如"第十三条是什么"、"IT-2024-001号文件"、具体编号/人名/产品名）
-               - normal：一般知识问答（"住宿费标准是多少"）
-               - complex：复杂/多跳/对比分析（"比较新旧两版制度的差异"、"住宿和交通哪个限额更高"）
-            5. hypothetical：仅当 type=complex 时生成——用 2-3 句话写一段"假设性答案"（包含该问题答案里大概率出现的术语与表述，不需要真实准确），用作语义检索锚点；其他类型填 null
-
-            用户原始问题：%s
-            %s
-
-            请只输出如下 JSON，不要输出其他内容：
-            {"normalized":"...","variants":["...","..."],"english":"...","type":"exact|normal|complex","hypothetical":"...或null"}
-            """;
+    // 改写提示词已迁移至 PromptTemplateService.SCENE_QUERY_REWRITE（可运营覆盖）
 
     /**
      * 改写结果：normalized 为规范化问题，variants 含检索变体，english 为英文
@@ -111,7 +94,9 @@ public class QueryRewriteService {
         try {
             String historyBlock = (history == null || history.isBlank()) ? ""
                     : "对话历史（供指代消解）：\n" + history + "\n";
-            String output = modelRouter.call(String.format(REWRITE_PROMPT, query, historyBlock), null).trim();
+            String output = modelRouter.call(promptTemplates.render(
+                    com.devhub.module.ai.service.PromptTemplateService.SCENE_QUERY_REWRITE,
+                    java.util.Map.of("question", query, "history", historyBlock)), null).trim();
             String json = output.replaceAll("(?s).*?(\\{.*}).*", "$1");
             CachedRewrites parsed = JsonHolder.MAPPER.readValue(json, CachedRewrites.class);
             return (parsed.normalized == null || parsed.normalized.isBlank()) ? null : parsed;

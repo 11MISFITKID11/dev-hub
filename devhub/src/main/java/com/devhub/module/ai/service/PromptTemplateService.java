@@ -64,7 +64,7 @@ public class PromptTemplateService {
                 请按以下结构回复，不要尝试回答问题本身，不要编造任何内容：
                 1. 先表理解：用一句话礼貌复述客户关心的点（如"您想了解的是…"）
                 2. 再说明：这个问题需要人工为您核实，我已无法从现有资料给您准确答复
-                3. 后引导：您可以直接创建工单，会有专员在一个工作日内响应；紧急问题可拨打 400-880-9666（9:00-21:00）
+                3. 后引导：您可以直接创建工单，坐席将按工单优先级在承诺时效内响应（紧急 30 分钟内）；紧急问题可拨打 400-880-9666（9:00-21:00）
 
                 客户问题：{question}
                 """, "{question} 客户问题");
@@ -86,7 +86,7 @@ public class PromptTemplateService {
 
                 请只输出如下 JSON，不要输出其他内容：
                 {"normalized":"...","variants":["...","..."],"english":"...","type":"exact|normal|complex","hypothetical":"...或null"}
-                """, "{question} 用户问题 {history} 对话历史块（可为空）");
+                """, "{question} 客户问题 {history} 对话历史块（可为空）");
         register(SCENE_TICKET_CLASSIFY, "工单 AI 分类定级", """
                 你是企业知识库客服系统的工单分类助手。请对工单进行分类和优先级判断。
                 分类只能从以下选一：{categories}

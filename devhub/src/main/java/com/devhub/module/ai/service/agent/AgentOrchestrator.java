@@ -312,6 +312,8 @@ public class AgentOrchestrator {
         String traceId = traceService.startTrace("chat_stream");
         com.devhub.module.ai.infrastructure.llm.UsageContext.begin();
         String conversationId = resolveConversationId(request.getConversationId());
+        // 请求线程捕获归属：落库发生在 reactor 线程，SecurityContext 不可用
+        final String streamOwner = currentOwner();
 
         // 输入安全栏（两道防线：正则 + 可疑样本小模型分类）——流式主路径此前未接（W3-6 补）
         com.devhub.module.ai.infrastructure.security.PromptGuard.ScanResult inputScan =
@@ -403,13 +405,13 @@ public class AgentOrchestrator {
                     } catch (Exception ignored) { agentMeta = Flux.empty(); }
                     StringBuilder agentReply = new StringBuilder();
                     return agentMeta.concatWith(Flux.just(ar.getFinalAnswer()))
-                            .filter(text -> !text.isEmpty())
+                            .filter(text -> !text.isEmpty() && !text.startsWith("__META__"))
                             .doOnNext(agentReply::append)
                             .doOnComplete(() -> {
                                 long[] tokens = com.devhub.module.ai.infrastructure.llm.UsageContext.take();
                                 persistConversation(conversationId, request.getMessage(), agentReply.toString(),
                                         fm != null ? fm : modelRegistry.primaryName(),
-                                        (int) (tokens[0] + tokens[1]), agentMsgId);
+                                        (int) (tokens[0] + tokens[1]), agentMsgId, false, streamOwner);
                                 recordAiUsage(fm != null ? fm : modelRegistry.primaryName(), tokens);
                                 traceService.endTrace(traceId);
                                 log.info("Agentic 自主解决: traceId={}, tools={}", traceId, ar.getUsedTools());
@@ -452,15 +454,17 @@ public class AgentOrchestrator {
         StringBuilder replyBuffer = new StringBuilder();
         final List<Float> finalVector = queryVector;
         final String finalRagContext = ragContext;
+        final boolean finalRefused = request.isEnableRag() && finalRagContext.isBlank();
         return meta.concatWith(modelRouter.stream(promptText, forceModel, temperature))
-                .filter(text -> !text.isEmpty())
+                // META 协议帧只发前端，不进累计 buffer（历史回看曾因此露出 __META__ 原文）
+                .filter(text -> !text.isEmpty() && !text.startsWith("__META__"))
                 .doOnNext(replyBuffer::append)
                 .doOnComplete(() -> {
                     long[] tokens = com.devhub.module.ai.infrastructure.llm.UsageContext.take();
                     persistConversation(conversationId, request.getMessage(),
                             replyBuffer.toString(),
                             forceModel != null ? forceModel : modelRegistry.primaryName(),
-                            (int) (tokens[0] + tokens[1]), assistantMsgId);
+                            (int) (tokens[0] + tokens[1]), assistantMsgId, finalRefused, streamOwner);
                     recordAiUsage(forceModel != null ? forceModel : modelRegistry.primaryName(), tokens);
                     // 语义缓存写入（对齐同步链路）：真正基于知识库的答案才进缓存
                     if (request.isEnableRag() && !finalRagContext.isBlank() && finalVector != null
@@ -757,15 +761,26 @@ public class AgentOrchestrator {
      */
     private String persistConversation(String conversationId, String userMessage, String reply,
                                      String model, int totalTokens, String presetAssistantId) {
+        return persistConversation(conversationId, userMessage, reply, model, totalTokens, presetAssistantId, false, null);
+    }
+
+    /** owner 由请求线程捕获传入：doOnComplete 在 reactor 线程执行，SecurityContext 已丢失（F-15 实测坑） */
+    private String currentOwner() {
+        try {
+            var auth = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication();
+            return auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())
+                    ? auth.getName() : null;
+        } catch (Exception e) { return null; }
+    }
+
+    private String persistConversation(String conversationId, String userMessage, String reply,
+                                     String model, int totalTokens, String presetAssistantId,
+                                     boolean refusedFlag, String ownerOverride) {
         try {
             Conversation conversation = conversationMapper.selectById(conversationId);
             if (conversation == null) {
-                String owner = null;
-                var auth = org.springframework.security.core.context.SecurityContextHolder
-                        .getContext().getAuthentication();
-                if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
-                    owner = auth.getName();
-                }
+                String owner = ownerOverride != null ? ownerOverride : currentOwner();
                 conversationMapper.insert(Conversation.builder()
                         .id(conversationId)
                         .title(userMessage.length() > 50 ? userMessage.substring(0, 50) + "..." : userMessage)
@@ -789,6 +804,7 @@ public class AgentOrchestrator {
                     .content(reply)
                     .model(model)
                     .tokenCount(totalTokens)
+                    .refused(refusedFlag ? 1 : 0)
                     .build();
             messageMapper.insert(assistant);
             return assistant.getId();

@@ -167,7 +167,20 @@ function newConv() { cur.value = null; msgs.value = [] }
 async function openConv(c) {
   cur.value = c
   const ms = await api.get(`/v1/conversations/${c.id}/messages`)
-  msgs.value = (ms || []).map(m => ({ role: m.role, content: m.content, html: m.role === 'ASSISTANT' ? render(m.content) : '' }))
+  let lastQ = ''
+  msgs.value = (ms || []).map(m => {
+    // 兜底剥离历史脏数据里的 __META__ 协议帧（新数据后端已不落 META）
+    const content = (m.content || '').replace(/^__META__\{[\s\S]*?\}(?=\S|$)/, '').trim()
+    const item = {
+      role: m.role, content,
+      html: m.role === 'ASSISTANT' ? render(content) : '',
+      messageId: m.id, feedback: m.feedback ?? null,
+      refused: m.role === 'ASSISTANT' && !!m.refused,
+      question: m.role === 'ASSISTANT' ? lastQ : ''
+    }
+    if (m.role === 'USER') lastQ = content
+    return item
+  })
 }
 function render(text) {
   let fences = (text.match(/```/g) || []).length

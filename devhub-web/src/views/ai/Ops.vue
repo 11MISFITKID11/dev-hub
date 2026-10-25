@@ -103,7 +103,7 @@ const dbgQuery = ref(''), dbgLoading = ref(false), dbg = ref(null)
 const traces = ref([]), tracesLoading = ref(false)
 async function loadTraces() {
   tracesLoading.value = true
-  try { traces.value = await api.get('/rag/traces?limit=20') } catch { }
+  try { traces.value = await api.get('/v1/rag/traces?limit=20') } catch { }
   finally { tracesLoading.value = false }
 }
 async function debug() {

@@ -43,6 +43,9 @@ public class Message {
     /** 用户反馈：1 有用 / -1 无用（点踩联动知识缺口记录） */
     private Integer feedback;
 
+    /** 该回答为检索拒答（历史会话恢复转工单入口） */
+    private Integer refused;
+
     /** 逻辑删除 */
     @TableLogic
     private Integer deleted;

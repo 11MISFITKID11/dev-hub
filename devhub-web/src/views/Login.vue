@@ -4,20 +4,25 @@
       <div class="login-brand">
         <div class="logo">DH</div>
         <div>
-          <div class="brand-name">DevHub</div>
-          <div class="brand-slogan">研发管理系统</div>
+          <div class="brand-name">HelpHub</div>
+          <div class="brand-slogan">AI 智能客服与工单处理系统</div>
         </div>
       </div>
-      <h2>欢迎回来</h2>
-      <p class="sub">登录后使用全部功能</p>
+      <h2>{{ regMode ? '注册客户账号' : '欢迎回来' }}</h2>
+      <p class="sub">{{ regMode ? '注册后即可向 AI 客服提问、提交工单' : '登录后使用全部功能' }}</p>
       <el-form @submit.prevent="doLogin">
         <el-form-item><el-input v-model="u" placeholder="用户名" size="large" autocomplete="username" /></el-form-item>
         <el-form-item><el-input v-model="p" type="password" placeholder="密码" size="large" show-password @keyup.enter="doLogin" /></el-form-item>
-        <el-button type="primary" size="large" class="login-btn" :loading="loading" @click="doLogin">登 录</el-button>
+        <el-button v-if="!regMode" type="primary" size="large" class="login-btn" :loading="loading" @click="doLogin">登 录</el-button>
+        <el-button v-else type="primary" size="large" class="login-btn" :loading="loading" @click="doRegister">注 册</el-button>
       </el-form>
-      <div class="hint">骨架账号：admin / admin123（管理员）· dev01 / dev123（普通用户）</div>
+      <div class="hint">坐席账号：admin / admin123 · 客户账号：dev01 / dev123（或自助注册）</div>
+      <div style="margin-top:10px; font-size:12.5px">
+        <a v-if="!regMode" href="javascript:;" style="color:var(--el-color-primary)" @click="regMode = true">没有账号？客户自助注册</a>
+        <a v-else href="javascript:;" style="color:var(--el-color-primary)" @click="regMode = false">已有账号？返回登录</a>
+      </div>
     </el-card>
-    <div class="login-footer">DevHub · 智能研发协作平台</div>
+    <div class="login-footer">HelpHub · AI 自动答 · 人工跟单 · 质检闭环</div>
   </div>
 </template>
 
@@ -26,9 +31,19 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
-const u = ref(''), p = ref(''), loading = ref(false)
+const u = ref(''), p = ref(''), loading = ref(false), regMode = ref(false)
 const router = useRouter(), store = useUserStore()
 
+async function doRegister() {
+  if (!u.value || !p.value) return
+  loading.value = true
+  try {
+    await store.login(u.value, p.value, '/auth/register')
+    router.push('/ai/chat')
+  } catch (e) {
+    /* 拦截器已统一弹错 */
+  } finally { loading.value = false }
+}
 async function doLogin() {
   if (!u.value || !p.value) return
   loading.value = true

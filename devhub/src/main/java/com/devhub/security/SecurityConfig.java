@@ -35,7 +35,7 @@ public class SecurityConfig {
                         // SSE/异步请求的 ASYNC 分发不再重复鉴权（初始请求已过 JWT；
                         // 拒绝会导致已提交的流连接被中断，前端 reader 异常）
                         .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
-                        .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/static/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // 通知 SSE：EventSource 带不了头，token 走查询参数由 Controller 校验

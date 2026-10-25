@@ -9,13 +9,8 @@ const routes = [
     children: [
       { path: '', redirect: '/ai/chat' },
       { path: 'dashboard', component: () => import('../views/Dashboard.vue') },
-      { path: 'project', component: () => import('../views/Project.vue') },
-      { path: 'requirement', component: () => import('../views/Requirement.vue') },
-      { path: 'task', component: () => import('../views/Task.vue') },
-      { path: 'defect', component: () => import('../views/Defect.vue') },
       { path: 'doc', component: () => import('../views/DocCenter.vue') },
       { path: 'report', component: () => import('../views/Report.vue') },
-      { path: 'metrics', component: () => import('../views/Metrics.vue') },
       { path: 'system', component: () => import('../views/System.vue') },
       { path: 'ai/chat', component: () => import('../views/ai/Chat.vue') },
       { path: 'ai/history', component: () => import('../views/ai/History.vue') },

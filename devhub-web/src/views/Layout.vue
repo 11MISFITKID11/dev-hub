@@ -3,7 +3,7 @@
     <el-aside :width="collapsed ? '64px' : '220px'" class="dh-rail" style="transition: width .25s">
       <div class="brand" @click="collapsed = !collapsed">
         <span class="blogo">DH</span>
-        <span v-if="!collapsed" class="bname">DevHub</span>
+        <span v-if="!collapsed" class="bname">HelpHub</span>
         <el-icon v-if="!collapsed" style="margin-left:auto"><Fold /></el-icon>
         <el-icon v-else style="margin-left:auto"><Expand /></el-icon>
       </div>
@@ -61,7 +61,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import NotificationBell from '../components/NotificationBell.vue'
 import GlobalSearch from '../components/GlobalSearch.vue'
-import { ChatDotRound, Folder, Odometer, List, Suitcase, DataAnalysis, Setting, Collection } from '@element-plus/icons-vue'
+import { ChatDotRound, Folder, Odometer, DataAnalysis, Setting, Collection } from '@element-plus/icons-vue'
 
 const store = useUserStore()
 const route = useRoute(), router = useRouter()
@@ -70,22 +70,20 @@ const dark = ref(localStorage.getItem('dh_theme') === 'dark')
 
 // 一级菜单图标（按菜单名映射；markRaw 避免组件被响应式代理）
 const menuIcons = {
-  '知识中枢': markRaw(ChatDotRound),
-  '文档中心': markRaw(Folder),
+  '智能客服': markRaw(ChatDotRound),
+  '知识库': markRaw(Folder),
   '工作台': markRaw(Odometer),
-  '需求管理': markRaw(List),
-  '研发协作': markRaw(Suitcase),
-  '报表统计': markRaw(DataAnalysis),
+  '运营报表': markRaw(DataAnalysis),
   '系统管理': markRaw(Setting)
 }
 const iconOf = name => menuIcons[name] || null
 
 const titleMap = {
-  '/dashboard': '工作台', '/project': '项目管理', '/task': '任务中心', '/defect': '缺陷跟踪',
-  '/doc': '文档中心', '/requirement': '需求管理', '/report': '报表统计', '/metrics': '效能度量', '/system': '系统管理',
-  '/ai/chat': '知识中枢 · 对话问答', '/ai/history': '知识中枢 · 会话历史',
-  '/ai/ops': '知识中枢 · 知识运营', '/ai/eval': '知识中枢 · AI 评测',
-  '/tickets': '知识中枢 · 工单中心', '/ticket/mine': '知识中枢 · 我的工单'
+  '/dashboard': '客服工作台',
+  '/doc': '知识库', '/report': '运营报表', '/system': '系统管理',
+  '/ai/chat': '智能客服 · 智能问答', '/ai/history': '智能客服 · 会话记录',
+  '/ai/ops': '智能客服 · 知识运营', '/ai/eval': '智能客服 · 质检回归',
+  '/tickets': '智能客服 · 工单中心', '/ticket/mine': '智能客服 · 我的工单'
 }
 const currentTitle = computed(() => titleMap[route.path] || 'DevHub')
 

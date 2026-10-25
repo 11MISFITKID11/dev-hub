@@ -35,8 +35,8 @@ export const useUserStore = defineStore('user', {
     }
   },
   actions: {
-    async login(username, password) {
-      const d = await api.post('/auth/login', { username, password })
+    async login(username, password, endpoint = '/auth/login') {
+      const d = await api.post(endpoint, { username, password })
       this.token = d.token; this.username = d.username; this.menus = d.menus || []
       localStorage.setItem('dh_token', d.token)
       localStorage.setItem('dh_user', JSON.stringify({ username: d.username, menus: d.menus }))

@@ -30,6 +30,38 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final DbUserDetailsService userDetailsService;
     private final JdbcTemplate jdbc;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    /**
+     * 客户自助注册（用户侧能力）：默认 USER 角色，仅见智能问答/我的工单/知识库。
+     * 注册成功直接返回令牌，免二次登录。
+     */
+    @PostMapping("/register")
+    public Result<Map<String, Object>> register(@Valid @RequestBody LoginRequest req) {
+        if (req.getUsername().length() < 3 || req.getUsername().length() > 32
+                || !req.getUsername().matches("[a-zA-Z0-9_]+")) {
+            return Result.fail(400, "用户名需为 3-32 位字母/数字/下划线");
+        }
+        if (req.getPassword().length() < 6) {
+            return Result.fail(400, "密码至少 6 位");
+        }
+        Integer exists = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM sys_user WHERE username = ?", Integer.class, req.getUsername());
+        if (exists != null && exists > 0) {
+            return Result.fail(409, "用户名已存在");
+        }
+        jdbc.update("INSERT INTO sys_user (username, password, nickname) VALUES (?,?,?)",
+                req.getUsername(), passwordEncoder.encode(req.getPassword()), req.getUsername());
+        jdbc.update("INSERT INTO sys_user_role (username, role_id) "
+                + "SELECT ?, id FROM sys_role WHERE role_key = 'USER'", req.getUsername());
+        loginLog(req.getUsername(), "-", 1, "注册成功");
+        String token = tokenProvider.createToken(
+                userDetailsService.userIdOf(req.getUsername()), req.getUsername(), List.of("USER"));
+        return Result.success(Map.of(
+                "token", token,
+                "username", req.getUsername(),
+                "menus", menusOf(req.getUsername())));
+    }
 
     @Data
     public static class LoginRequest {

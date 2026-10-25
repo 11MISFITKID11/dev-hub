@@ -356,6 +356,51 @@ public class AgentOrchestrator {
         }
 
         String fullContext = joinContext(ragContext, historyContext);
+        // ===== Agentic 层：事务型问题（查订单/物流/报修建单）或知识库兜不住（拒答）时，交给工具循环自主解决 =====
+        // 知识类问题仍走 RAG 直答（快、带引用）；只有命中事务信号或门控未过才进入 agent（省成本）
+        boolean agentTriggered = AGENT_TRIGGER.matcher(request.getMessage()).find();
+        if ((request.isEnableRag() && ragContext.isBlank()) || agentTriggered) {
+            String fm = request.getModelOptions() != null ? request.getModelOptions().getModel() : null;
+            try {
+                String agentContext = fullContext + "\n\n[客服场景指引] 查询订单/物流/签收进度必须用 query_order（不要凭参考资料猜测）；"
+                        + "客户明确要求报修/创建工单/投诉，或故障无法当场指导解决时，调用 create_ticket 创建工单，并在回答中告知工单号与下一步。";
+                ReActAgent.ReActResult ar = reActAgent.execute(request.getMessage(), agentContext,
+                        AGENT_TOOLS, traceId, fm);
+                if (!ar.getUsedTools().isEmpty()) {
+                    steps.addAll(ar.getThinkingSteps());
+                    String agentMsgId = java.util.UUID.randomUUID().toString().replace("-", "");
+                    Flux<String> agentMeta;
+                    try {
+                        Map<String, Object> mi = new LinkedHashMap<>();
+                        mi.put("conversationId", conversationId);
+                        mi.put("messageId", agentMsgId);
+                        mi.put("sources", sources);
+                        mi.put("thinkingSteps", steps);
+                        mi.put("refused", false);
+                        mi.put("agentResolved", true);
+                        mi.put("agentTools", ar.getUsedTools());
+                        agentMeta = Flux.just("__META__" + objectMapper.writeValueAsString(mi));
+                    } catch (Exception ignored) { agentMeta = Flux.empty(); }
+                    StringBuilder agentReply = new StringBuilder();
+                    return agentMeta.concatWith(Flux.just(ar.getFinalAnswer()))
+                            .filter(text -> !text.isEmpty())
+                            .doOnNext(agentReply::append)
+                            .doOnComplete(() -> {
+                                long[] tokens = com.devhub.module.ai.infrastructure.llm.UsageContext.take();
+                                persistConversation(conversationId, request.getMessage(), agentReply.toString(),
+                                        fm != null ? fm : modelRegistry.primaryName(),
+                                        (int) (tokens[0] + tokens[1]), agentMsgId);
+                                recordAiUsage(fm != null ? fm : modelRegistry.primaryName(), tokens);
+                                traceService.endTrace(traceId);
+                                log.info("Agentic 自主解决: traceId={}, tools={}", traceId, ar.getUsedTools());
+                            })
+                            .doOnError(e -> traceService.endTrace(traceId));
+                }
+                // agent 未使用工具：按原链路继续（知识库作答或拒答转人工）
+            } catch (Exception e) {
+                log.warn("Agentic 层执行失败，回落常规链路: {}", e.getMessage());
+            }
+        }
         String promptText = request.isEnableRag() && ragContext.isBlank()
                 ? buildNoResultPrompt(request.getMessage(), fullContext)
                 : buildDirectPrompt(request.getMessage(), ragContext, historyContext);
@@ -747,4 +792,12 @@ public class AgentOrchestrator {
             return null;
         }
     }
+
+    /** 事务型信号：命中即进入 Agentic 工具循环（知识类问题不命中，仍走 RAG 直答） */
+    private static final java.util.regex.Pattern AGENT_TRIGGER = java.util.regex.Pattern.compile(
+            "我的订单|订单号|订单 ?CS|CS\\d{6,}|物流|快递|到哪了|什么时候.{0,4}发货|发货了吗|签收了吗|查询订单|"
+                    + "报修|帮我.{0,6}(工单|报修|投诉|退款)|创建工单|建单|转人工");
+
+    /** Agentic 层开放的工具（客服场景最小集） */
+    private static final List<String> AGENT_TOOLS = List.of("query_order", "create_ticket");
 }

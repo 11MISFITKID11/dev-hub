@@ -43,6 +43,7 @@ public class ReActAgent {
     private final ToolRegistry toolRegistry;
     private final ToolRouter toolRouter;
     private final TraceService traceService;
+    private final org.springframework.jdbc.core.JdbcTemplate auditJdbc;
 
     @Value("${agent.orchestrator.max-iterations:10}")
     private int maxIterations;
@@ -130,11 +131,30 @@ public class ReActAgent {
     }
 
     private BaseTool.ToolResult executeTool(ToolExecutionRequest request) {
+        BaseTool.ToolResult result;
         try {
-            return toolRouter.route(request.name(), request.arguments());
+            result = toolRouter.route(request.name(), request.arguments());
         } catch (Exception e) {
             log.warn("工具 {} 执行异常: {}", request.name(), e.getMessage());
-            return BaseTool.ToolResult.failure(request.name(), "执行异常: " + e.getMessage(), 0);
+            result = BaseTool.ToolResult.failure(request.name(), "执行异常: " + e.getMessage(), 0);
+        }
+        auditToolCall(request, result);
+        return result;
+    }
+
+    /** 工具调用审计：AI 自主解决率/工具使用分布的数据源（失败不阻断主链路） */
+    private void auditToolCall(ToolExecutionRequest request, BaseTool.ToolResult result) {
+        try {
+            String username = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication().getName();
+            String args = request.arguments() == null ? "" : request.arguments();
+            if (args.length() > 480) args = args.substring(0, 480);
+            auditJdbc.update(
+                    "INSERT INTO agent_action (username, conversation_id, tool_name, args, success, elapsed_ms) "
+                            + "VALUES (?, NULL, ?, ?, ?, ?)",
+                    username, request.name(), args, result.success() ? 1 : 0, (int) result.elapsedMs());
+        } catch (Exception e) {
+            log.debug("agent_action 审计失败: {}", e.getMessage());
         }
     }
 

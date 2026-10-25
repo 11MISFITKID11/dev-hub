@@ -61,6 +61,9 @@
           <div :class="m.role === 'USER' ? 'b-user' : 'b-ai'">
             <div v-if="m.role === 'USER'" style="white-space:pre-wrap">{{ m.content }}</div>
             <template v-else>
+              <div v-if="m.agentTools && m.agentTools.length" class="agent-chips">
+                <span v-for="t in m.agentTools" :key="t" class="agent-chip">🔧 {{ TOOL_LBL[t] || t }}</span>
+              </div>
               <div class="md" v-html="m.html"></div>
               <div v-if="m.messageId && !streaming" style="margin-top:6px; display:flex; gap:6px; font-size:13px; align-items:center">
                 <span class="fb" :class="{ on: m.feedback === 1 }" title="有用" @click="vote(m, 1)">👍</span>
@@ -120,6 +123,7 @@ const store = useUserStore()
 const isAdminSide = computed(() => store.allowedPaths.has('/tickets') || store.allowedPaths.has('/dashboard'))
 const convs = ref([]), cur = ref(null), msgs = ref([])
 const suggestions = ['退款政策里 7 天无理由怎么算？', '网关一直闪红灯连不上网怎么办？', '设备保修期是多久？怎么申请维修？']
+const TOOL_LBL = { query_order: '已查询订单物流', create_ticket: '已创建工单' }
 const input = ref(''), streaming = ref(false), ragOn = ref(true)
 const listEl = ref(), ctrl = ref(null), srcOpen = ref(null)
 const srcDrawer = ref(false)
@@ -242,6 +246,7 @@ async function send() {
             loadConvs()
           }
           aiMsg.sources = meta.sources || []
+          aiMsg.agentTools = meta.agentTools || []
           aiMsg.messageId = meta.messageId
           aiMsg.refused = !!meta.refused
         } else {
@@ -273,6 +278,13 @@ onMounted(() => { loadConvs(); loadModels() })
 </script>
 
 <style scoped>
+/* Agentic 动作标记 */
+.agent-chips { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.agent-chip {
+  font-size: 12px; color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9); border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 999px; padding: 1px 10px;
+}
 /* 接待台头部 */
 .desk-head {
   display: flex; align-items: flex-end; justify-content: space-between;

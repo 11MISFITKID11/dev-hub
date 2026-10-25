@@ -69,12 +69,13 @@ const qa = ref(null)
 
 const CAT_NAMES = { PRODUCT: '产品咨询', BUG: '缺陷故障', ACCOUNT: '账号权限', BILLING: '计费相关', USAGE: '使用帮助', OTHER: '其他' }
 
+const agent = ref(null)
 const cnt = k => { const it = ((stats.value && stats.value.byStatus) || []).find(x => x.k === k); return it ? it.v : 0 }
 const cards = computed(() => stats.value ? [
   { label: '待受理工单', value: cnt('PENDING'), sub: 'AI 已分类定级，等待坐席', danger: true },
   { label: '处理中', value: cnt('PROCESSING'), sub: '坐席跟进（可调 AI 建议）', danger: false },
   { label: '平均满意度', value: ((stats.value.overall.sat || 0)).toFixed(1) + ' / 5', sub: '已评价工单均值', danger: false },
-  { label: 'AI 质检均分', value: Math.round(stats.value.overall.qc || 0) + ' / 100', sub: '低于 70 进入质量看板', danger: false }
+  { label: 'AI 自主解决率', value: ((agent.value && agent.value.resolutionRate) || 0) + '%', sub: 'Agentic 工具解决 / 总对话（7 天）', danger: false }
 ] : [])
 
 const catRows = computed(() => {
@@ -89,11 +90,12 @@ const maxTrend = computed(() => Math.max(1, ...trend.value.map(t => Number(t.cre
 onMounted(async () => {
   loading.value = true
   try {
-    const [s, q] = await Promise.all([
+    const [s, q, a] = await Promise.all([
       api.get('/v1/tickets/stats').catch(() => null),
-      api.get('/report/qa-quality').catch(() => null)
+      api.get('/report/qa-quality').catch(() => null),
+      api.get('/v1/agent/stats').catch(() => null)
     ])
-    stats.value = s; qa.value = q
+    stats.value = s; qa.value = q; agent.value = a
   } finally { loading.value = false }
 })
 </script>

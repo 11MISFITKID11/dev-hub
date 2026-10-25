@@ -30,6 +30,7 @@
       <div style="flex:1; overflow-y:auto; padding:6px; border-radius:14px; background:rgba(255,255,255,.42); border:1px solid var(--dh-glass-border, rgba(255,255,255,.55)); -webkit-backdrop-filter:saturate(160%) blur(18px); backdrop-filter:saturate(160%) blur(18px)">
         <div v-for="c in convs" :key="c.id" class="conv-item" :class="{ on: cur && cur.id === c.id }" @click="openConv(c)">
           <span class="conv-title">{{ c.title || c.id }}</span>
+          <el-icon class="conv-del" title="删除会话" @click.stop="delConv(c)"><Delete /></el-icon>
         </div>
       </div>
     </div>
@@ -153,6 +154,14 @@ const curSources = computed(() => {
 
 async function loadConvs() {
   convs.value = (await api.get('/v1/conversations')) || []
+}
+async function delConv(c) {
+  try { await ElMessageBox.confirm(`删除会话「${(c.title || c.id).slice(0, 20)}」？聊天记录将一并删除。`, '删除会话', { type: 'warning' }) }
+  catch { return }
+  await api.delete(`/v1/conversations/${c.id}`)
+  ElMessage.success('已删除')
+  if (cur.value && cur.value.id === c.id) { cur.value = null; msgs.value = [] }
+  loadConvs()
 }
 function newConv() { cur.value = null; msgs.value = [] }
 async function openConv(c) {
@@ -339,6 +348,12 @@ onMounted(() => { loadConvs(); loadModels() })
   transition: background .15s ease, border-color .15s ease;
 }
 .conv-item:hover { background: rgba(0, 113, 227, 0.07); }
+.conv-item { display: flex; align-items: center; gap: 4px; }
+.conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-del { flex-shrink: 0; opacity: 0; transition: opacity .15s ease; color: var(--el-text-color-secondary); }
+.conv-item:hover .conv-del { opacity: 1; }
+.conv-del:hover { color: var(--el-color-danger); }
+.conv-item.on .conv-del { color: rgba(255,255,255,.85); }
 html.dark .conv-item:hover { background: rgba(79, 148, 234, 0.12); }
 .conv-item.on {
   background: var(--el-color-primary);

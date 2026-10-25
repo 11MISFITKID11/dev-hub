@@ -51,11 +51,23 @@ public class ConversationController {
     }
 
     /**
-     * 删除会话（逻辑删除）
+     * 删除会话（逻辑删除，级联删除消息；仅本人或管理员）
      */
     @DeleteMapping("/{conversationId}")
     public Result<Void> delete(@PathVariable String conversationId) {
+        var conv = conversationMapper.selectById(conversationId);
+        if (conv == null) return Result.success(null);
+        String username = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getName();
+        boolean admin = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().contains("ADMIN"));
+        if (!admin && !username.equals(conv.getUserId())) {
+            return Result.fail(403, "只能删除自己的会话");
+        }
         conversationMapper.deleteById(conversationId);
+        messageMapper.delete(new LambdaQueryWrapper<Message>()
+                .eq(Message::getConversationId, conversationId));
         return Result.success(null);
     }
 }

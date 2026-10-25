@@ -61,13 +61,8 @@ public class AsyncIngestService {
         String fileName = file.getOriginalFilename();
         String uploader = currentUsername();
 
-        // 部门数据域：上传人的部门；查不到挂公共（NULL）
+        // 客服知识库面向全部客户（跨部门检索），入库固定公共域；部门私有知识后续经显式选项支持
         Long deptId = null;
-        try {
-            deptId = jdbc.queryForObject(
-                    "SELECT dept_id FROM sys_user WHERE username = ? AND deleted = 0",
-                    Long.class, uploader);
-        } catch (Exception ignored) { }
 
         insertShell(documentId, fileName, file.getSize(), uploader, categoryId, deptId, "upload");
 
@@ -151,12 +146,8 @@ public class AsyncIngestService {
 
         String documentId = UUID.randomUUID().toString().replace("-", "");
         String uploader = currentUsername();
+        // 客服知识库面向全部客户（跨部门检索），入库固定公共域；部门私有知识后续经显式选项支持
         Long deptId = null;
-        try {
-            deptId = jdbc.queryForObject(
-                    "SELECT dept_id FROM sys_user WHERE username = ? AND deleted = 0",
-                    Long.class, uploader);
-        } catch (Exception ignored) { }
 
         insertShell(documentId, title, content.length(), uploader, categoryId, deptId, "web");
         Map<String, String> payload = new HashMap<>();

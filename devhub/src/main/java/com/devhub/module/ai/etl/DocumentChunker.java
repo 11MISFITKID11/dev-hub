@@ -93,6 +93,11 @@ public class DocumentChunker {
         if (chunks.isEmpty()) {
             chunks = paragraphChunk(text, documentId);
         }
+        // 真实网页正文常混入空段（cookie 提示/隐私横幅等）：空/纯空白切片必须剔除，
+        // 否则向量化批量调用整批失败（embed 不接受空文本）
+        chunks = chunks.stream()
+                .filter(c -> c.getContent() != null && !c.getContent().isBlank())
+                .toList();
 
         log.info("文档切片完成: documentId={}, totalChunks={}, avgChunkSize={}",
                 documentId, chunks.size(),

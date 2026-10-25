@@ -28,6 +28,8 @@ public class TicketCreateTool extends BaseTool {
     @Override
     public String getDescription() {
         return "为客户创建售后工单（设备报修、故障申报、退款申请等无法当场解决的问题）。"
+                + "content 只客观描述问题现象、设备与影响范围，禁止写\"请客户提供…\"类追问"
+                + "（需要客户补充的 SN 码/联系方式等信息由你在最终回答中直接向客户提出）。"
                 + "调用后返回工单号，客户可凭工单号在「我的工单」跟进。";
     }
 

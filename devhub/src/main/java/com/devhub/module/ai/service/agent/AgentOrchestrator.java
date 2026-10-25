@@ -363,7 +363,8 @@ public class AgentOrchestrator {
             String fm = request.getModelOptions() != null ? request.getModelOptions().getModel() : null;
             try {
                 String agentContext = fullContext + "\n\n[客服场景指引] 查询订单/物流/签收进度必须用 query_order（不要凭参考资料猜测）；"
-                        + "客户明确要求报修/创建工单/投诉，或故障无法当场指导解决时，调用 create_ticket 创建工单，并在回答中告知工单号与下一步。";
+                        + "客户明确要求报修/创建工单/投诉，或故障无法当场指导解决时，调用 create_ticket 创建工单（content 只写问题事实，不写追问），"
+                        + "并在最终回答中告知工单号、下一步安排，以及需要客户补充的信息（如 SN 码、联系方式）。";
                 ReActAgent.ReActResult ar = reActAgent.execute(request.getMessage(), agentContext,
                         AGENT_TOOLS, traceId, fm);
                 if (!ar.getUsedTools().isEmpty()) {

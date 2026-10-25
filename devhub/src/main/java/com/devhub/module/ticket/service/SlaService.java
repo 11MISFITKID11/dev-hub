@@ -177,20 +177,33 @@ public class SlaService {
         }
     }
 
-    /** 升级：首次超时提级并重算时钟，之后仅通知（防每轮连环升级） */
+    /** 升级：首次超时提级并重挂解决时钟（首响时钟一次性，不再重挂防每周期重复轰炸），之后仅通知 */
     private void escalate(SupportTicket t, boolean isFirst) {
         boolean firstTime = t.getSlaBreach() == null || t.getSlaBreach() == 0;
         String clock = isFirst ? "首响" : "解决";
+        String nextPri = SlaClock.nextPriority(t.getPriority());
+        boolean capped = nextPri.equals(t.getPriority());
         String text = "SLA " + clock + "超时（" + (isFirst
                 ? "首响截止 " + t.getSlaFirstDue() : "解决截止 " + SlaClock.effectiveResolveDue(t, LocalDateTime.now()))
-                + "）" + (firstTime ? "，已升级优先级 " + t.getPriority() + " → " + SlaClock.nextPriority(t.getPriority()) : "");
+                + "）" + (firstTime && !capped
+                ? "，已升级优先级 " + t.getPriority() + " → " + nextPri + "并重挂解决时钟"
+                : "，已通知值班坐席加急处理");
         if (firstTime) {
-            t.setPriority(SlaClock.nextPriority(t.getPriority()));
+            t.setPriority(nextPri);
             ticketMapper.update(null, new LambdaUpdateWrapper<SupportTicket>()
                     .eq(SupportTicket::getId, t.getId())
                     .set(SupportTicket::getSlaBreach, 1)
                     .set(SupportTicket::getPriority, t.getPriority()));
-            armClock(t, true); // 升级后重算双时钟并重新注册
+            // 首响已超时：只重挂解决时钟；首响时钟终结，避免升级后每周期再触发超时事件
+            SlaPolicy p = policies().get(t.getPriority());
+            if (p != null) {
+                LocalDateTime resolveDue = LocalDateTime.now().plusMinutes(p.getResolveMinutes());
+                t.setSlaResolveDue(resolveDue);
+                ticketMapper.update(null, new LambdaUpdateWrapper<SupportTicket>()
+                        .eq(SupportTicket::getId, t.getId())
+                        .set(SupportTicket::getSlaResolveDue, resolveDue));
+                register(t.getId(), null, resolveDue);
+            }
         }
         SupportTicketReply event = new SupportTicketReply();
         event.setTicketId(t.getId());

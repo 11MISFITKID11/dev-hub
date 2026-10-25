@@ -3,7 +3,12 @@
     <!-- 质量看板 -->
     <el-row :gutter="12" style="margin-bottom: 12px" v-if="stats">
       <el-col :span="6"><el-card shadow="never">
-        <div class="st"><div class="st-l">待受理</div><div class="st-v dh-num">{{ cnt('PENDING') }}</div></div>
+        <div class="st"><div class="st-l">未分派 / 处理中</div>
+          <div class="st-v dh-num">
+            <span :style="v.unassigned ? 'color:var(--el-color-warning)' : ''">{{ v.unassigned }}</span>
+            <span style="font-size:13px;color:var(--el-text-color-secondary)"> / {{ cnt('PROCESSING') }}</span>
+          </div>
+        </div>
       </el-card></el-col>
       <el-col :span="6"><el-card shadow="never">
         <div class="st"><div class="st-l">处理中</div><div class="st-v dh-num">{{ cnt('PROCESSING') }}</div></div>
@@ -70,7 +75,9 @@
         <span v-if="s.row.qcScore != null" class="dh-num" :style="s.row.qcScore < 70 ? 'color:var(--el-color-danger)' : ''">{{ s.row.qcScore }}</span>
         <span v-else style="color:var(--el-text-color-placeholder)">-</span>
       </template></el-table-column>
-      <el-table-column prop="createTime" label="创建时间" width="150" />
+      <el-table-column label="创建时间" width="110"><template #default="s">
+        <span style="font-size:12px">{{ fmt(s.row.createTime) }}</span>
+      </template></el-table-column>
       <el-table-column label="操作" width="80" fixed="right"><template #default="s">
         <el-button link type="primary" size="small" @click="open(s.row.id)">处理</el-button>
       </template></el-table-column>
@@ -79,7 +86,7 @@
       :page-size="q.size" :current-page="q.page" @current-change="p => { q.page = p; load() }" /></div>
 
     <!-- 处理抽屉 -->
-    <el-drawer v-model="drawer" size="46%" :title="cur && cur.ticketNo + ' · ' + cur.ticket.title">
+    <el-drawer v-model="drawer" size="46%" :title="cur && cur.ticket.ticketNo + ' · ' + cur.ticket.title">
       <template v-if="cur">
         <el-descriptions :column="2" size="small" border style="margin-bottom:12px">
           <el-descriptions-item label="发起人">{{ cur.ticket.username }}</el-descriptions-item>
@@ -112,7 +119,7 @@
 
         <div class="blk"><div class="blk-t">处理往来</div>
           <el-timeline style="padding-left:2px; margin-top:8px">
-            <el-timeline-item v-for="r in cur.replies" :key="r.id" :timestamp="r.createTime"
+            <el-timeline-item v-for="r in cur.replies" :key="r.id" :timestamp="fmt(r.createTime)"
               :type="r.role === 'agent' ? 'primary' : (r.role === 'system' ? 'warning' : (r.role === 'internal' ? 'warning' : 'info'))"
               :hollow="r.role === 'system'">
               <b>{{ r.author }}</b>（{{ ROLE_LBL[r.role] || r.role }}）：<span style="white-space:pre-wrap">{{ r.content }}</span>
@@ -182,9 +189,10 @@ const CAT = computed(() => {
 const CAT_STYLE = { PRODUCT: 'info', BUG: 'danger', ACCOUNT: 'warning', BILLING: 'warning', USAGE: 'info', OTHER: 'info' }
 const PRI = { HIGH: '高', MEDIUM: '中', LOW: '低' }
 const PRI_STYLE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'info' }
-const SRC = { manual: '手动创建', chat_refusal: 'AI 拒答转单', chat_dislike: '点踩转单' }
+const SRC = { manual: '手动创建', chat_refusal: 'AI 拒答转单', chat_dislike: '点踩转单', ai_agent: 'AI 代客建单' }
+const fmt = s => (s || '').replace('T', ' ').slice(5, 16)
 
-const q = ref({ page: 1, size: 10, status: '', category: '', priority: '', keyword: '', view: 'all' })
+const q = ref({ page: 1, size: 10, status: '', category: '', priority: '', keyword: '', view: 'mine' })
 const rows = ref([]), tags = ref({}), total = ref(0), loading = ref(false)
 const stats = ref(null)
 const drawer = ref(false), cur = ref(null)

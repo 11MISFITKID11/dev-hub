@@ -26,7 +26,9 @@
         <el-button v-else-if="s.row.status === 'RESOLVED' || s.row.status === 'CLOSED'" link type="primary" size="small" @click="open(s.row.id)">去评价</el-button>
         <span v-else style="color:var(--el-text-color-placeholder)">-</span>
       </template></el-table-column>
-      <el-table-column prop="createTime" label="创建时间" width="160" />
+      <el-table-column label="创建时间" width="120"><template #default="s">
+        <span style="font-size:12px">{{ fmt(s.row.createTime) }}</span>
+      </template></el-table-column>
       <el-table-column label="操作" width="80" fixed="right"><template #default="s">
         <el-button link type="primary" size="small" @click="open(s.row.id)">详情</el-button>
       </template></el-table-column>
@@ -48,12 +50,25 @@
 
     <el-drawer v-model="drawer" size="44%" :title="cur && cur.ticketNo + ' · ' + cur.title">
       <template v-if="cur">
+        <!-- 进度与服务承诺：让客户知道"接下来会发生什么" -->
+        <div class="blk">
+          <el-steps :active="stepActive" align-center style="margin-bottom:4px" finish-status="success">
+            <el-step title="已提交" /><el-step title="处理中" /><el-step title="已解决" /><el-step title="已评价" />
+          </el-steps>
+          <div style="font-size:12px;color:var(--el-text-color-secondary);text-align:center">
+            <template v-if="cur.status === 'PENDING' || cur.status === 'PROCESSING'">
+              {{ cur.handler ? '处理人：' + cur.handler + ' · ' : '' }}预计{{ cur.slaFirstAt ? '已响应' : '响应' }}：
+              {{ fmt(cur.slaFirstAt || cur.slaFirstDue) }}，超时自动升级加急
+            </template>
+            <template v-else>工单已{{ STATUS[cur.status] }}{{ cur.handler ? ' · 处理人：' + cur.handler : '' }}</template>
+          </div>
+        </div>
         <div class="blk"><div class="blk-t">工单内容</div><div class="blk-b">{{ cur.content }}</div></div>
         <div class="blk"><div class="blk-t">处理进展</div>
           <el-timeline style="padding-left:2px; margin-top:8px">
-            <el-timeline-item v-for="r in replies" :key="r.id" :timestamp="r.createTime"
+            <el-timeline-item v-for="r in replies" :key="r.id" :timestamp="fmt(r.createTime)"
               :type="r.role === 'agent' ? 'primary' : 'info'">
-              <b>{{ r.role === 'agent' ? '坐席 ' + r.author : '我' }}：</b><span style="white-space:pre-wrap">{{ r.content }}</span>
+              <b>{{ r.role === 'agent' || r.role === 'internal' ? '坐席 ' + r.author : '我' }}：</b><span style="white-space:pre-wrap">{{ r.content }}</span>
             </el-timeline-item>
             <el-timeline-item v-if="!replies.length" timestamp="等待坐席受理">已提交，等待受理</el-timeline-item>
           </el-timeline>
@@ -99,13 +114,21 @@ const CAT = computed(() => {
 })
 const PRI = { HIGH: '高', MEDIUM: '中', LOW: '低' }
 const PRI_STYLE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'info' }
-const SRC = { manual: '手动创建', chat_refusal: 'AI 拒答转单', chat_dislike: '点踩转单' }
+const SRC = { manual: '手动创建', chat_refusal: 'AI 拒答转单', chat_dislike: '点踩转单', ai_agent: 'AI 代客建单' }
+const fmt = s => (s || '').replace('T', ' ').slice(5, 16)
 
 const q = ref({ page: 1, size: 10 })
 const rows = ref([]), total = ref(0), loading = ref(false)
 const dlg = ref(false), form = ref({}), creating = ref(false)
 const drawer = ref(false), cur = ref(null), replies = ref([])
 const replyText = ref(''), stars = ref(5), comment = ref('')
+const stepActive = computed(() => {
+  if (!cur.value) return 0
+  if (cur.value.satisfaction) return 4
+  if (cur.value.status === 'CLOSED' || cur.value.status === 'RESOLVED') return 3
+  if (cur.value.status === 'PROCESSING') return 2
+  return 1
+})
 
 async function load() {
   loading.value = true

@@ -117,7 +117,11 @@ public class TicketService {
                     .in(SupportTicket::getStatus, "PENDING", "PROCESSING");
             default -> { }
         }
-        return ticketMapper.selectPage(new Page<>(page, size), w.orderByDesc(SupportTicket::getCreateTime));
+        // 坐席开工动线：超时置顶 → 解决时钟紧迫优先 → 新单靠前（未分派/风险视图同理复用）
+        return ticketMapper.selectPage(new Page<>(page, size), w
+                .orderByDesc(SupportTicket::getSlaBreach)
+                .orderByAsc(SupportTicket::getSlaResolveDue)
+                .orderByDesc(SupportTicket::getCreateTime));
     }
 
     private String currentUser() {
@@ -141,6 +145,7 @@ public class TicketService {
                 new LambdaQueryWrapper<SupportTicketReply>()
                         .eq(SupportTicketReply::getTicketId, id)
                         .ne(!admin, SupportTicketReply::getRole, "internal")
+                        .ne(!admin, SupportTicketReply::getRole, "system")
                         .orderByAsc(SupportTicketReply::getCreateTime));
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("ticket", t);

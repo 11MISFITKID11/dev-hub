@@ -34,6 +34,7 @@ public class ModelRouter {
     private final ChatModelRegistry registry;
     private final CircuitBreaker circuitBreaker;
     private final LlmCallLimiter callLimiter;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
     /**
      * 同步调用模型，失败后沿降级链自动切换（受全局并发限制保护）
@@ -48,7 +49,13 @@ public class ModelRouter {
 
     /** 带请求级参数覆盖（temperature）的同步调用 */
     public String call(String promptText, String requestedModel, Double temperature) {
-        return callLimiter.guard(() -> doCall(promptText, requestedModel, temperature));
+        long t = System.currentTimeMillis();
+        try {
+            return callLimiter.guard(() -> doCall(promptText, requestedModel, temperature));
+        } finally {
+            meters.timer("devhub.llm.latency", "mode", "sync")
+                    .record(System.currentTimeMillis() - t, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
     }
 
     private String doCall(String promptText, String requestedModel, Double temperature) {
@@ -86,7 +93,13 @@ public class ModelRouter {
      */
     public ChatResponse callWithTools(List<ChatMessage> messages, List<ToolSpecification> tools,
                                       String requestedModel) {
-        return callLimiter.guard(() -> doCallWithTools(messages, tools, requestedModel));
+        long t = System.currentTimeMillis();
+        try {
+            return callLimiter.guard(() -> doCallWithTools(messages, tools, requestedModel));
+        } finally {
+            meters.timer("devhub.llm.latency", "mode", "tools")
+                    .record(System.currentTimeMillis() - t, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
     }
 
     private ChatResponse doCallWithTools(List<ChatMessage> messages, List<ToolSpecification> tools,
@@ -137,12 +150,17 @@ public class ModelRouter {
 
     /** 带请求级参数覆盖（temperature）的流式调用 */
     public Flux<String> stream(String promptText, String requestedModel, Double temperature) {
-        // 订阅时获取许可，流结束时释放——SSE 长流也计入并发额度
+        // 订阅时获取许可，流结束时释放——SSE 长流也计入并发额度；耗时在 doFinally 计入直方图
         return Flux.defer(() -> {
             callLimiter.acquire();
+            long t = System.currentTimeMillis();
             try {
                 return doStream(promptText, requestedModel, temperature)
-                        .doFinally(signal -> callLimiter.release());
+                        .doFinally(signal -> {
+                            callLimiter.release();
+                            meters.timer("devhub.llm.latency", "mode", "stream")
+                                    .record(System.currentTimeMillis() - t, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        });
             } catch (Exception e) {
                 callLimiter.release();
                 throw e;

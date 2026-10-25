@@ -41,6 +41,7 @@ public class SlaService {
     private final SlaPolicyMapper policyMapper;
     private final NotificationService notify;
     private final StringRedisTemplate redis;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
     /** 策略极小表且基本不变，进程内缓存 5 分钟 */
     private volatile Map<String, SlaPolicy> policyCache = Map.of();
@@ -48,12 +49,13 @@ public class SlaService {
 
     public SlaService(SupportTicketMapper ticketMapper, SupportTicketReplyMapper replyMapper,
                       SlaPolicyMapper policyMapper, NotificationService notify,
-                      StringRedisTemplate redis) {
+                      StringRedisTemplate redis, io.micrometer.core.instrument.MeterRegistry meters) {
         this.ticketMapper = ticketMapper;
         this.replyMapper = replyMapper;
         this.policyMapper = policyMapper;
         this.notify = notify;
         this.redis = redis;
+        this.meters = meters;
     }
 
     private Map<String, SlaPolicy> policies() {
@@ -213,6 +215,7 @@ public class SlaService {
         replyMapper.insert(event);
         String to = t.getHandler() != null ? t.getHandler() : "admin";
         notify.push(to, "sla", "SLA 超时：" + t.getTicketNo(), text, "/#/tickets");
+        meters.counter("devhub.sla.breach", "clock", isFirst ? "first" : "resolve").increment();
         log.info("SLA 升级: ticket={}, clock={}, 优先级={}", t.getTicketNo(), clock, t.getPriority());
     }
 

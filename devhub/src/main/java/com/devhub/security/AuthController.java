@@ -108,10 +108,17 @@ public class AuthController {
     @GetMapping("/me")
     public Result<Map<String, Object>> me(Authentication auth) {
         String username = auth.getName();
-        return Result.success(Map.of(
+        Map<String, Object> data = new java.util.LinkedHashMap<>(Map.of(
                 "username", username,
                 "roles", auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList(),
                 "menus", menusOf(username)));
+        try {
+            data.put("perms", jdbc.queryForList("""
+                    SELECT DISTINCT p.perm FROM sys_role_perm p
+                    JOIN sys_user_role ur ON ur.role_id = p.role_id
+                    WHERE ur.username = ?""", String.class, username));
+        } catch (Exception ignored) { }
+        return Result.success(data);
     }
 
     /** 登出 = 客户端删除令牌（无服务端黑名单，骨架版；正式版可加 Redis 黑名单） */

@@ -1,6 +1,19 @@
 <template>
   <div style="display:grid; gap:16px">
     <el-card shadow="never">
+      <template #header>最近调用链 —— ai_trace 落库，重启可查（耗时/spans）</template>
+      <el-table :data="traces" size="small" v-loading="tracesLoading">
+        <el-table-column prop="trace_id" label="TraceID" width="150" />
+        <el-table-column prop="operation" label="操作" width="120" />
+        <el-table-column label="耗时" width="110"><template #default="s">
+          <span class="dh-num" :style="(s.row.duration_ms||0) > 10000 ? 'color:var(--el-color-danger)' : ''">{{ s.row.duration_ms }} ms</span>
+        </template></el-table-column>
+        <el-table-column prop="span_count" label="Spans" width="70" />
+        <el-table-column prop="create_time" label="时间" width="170" />
+      </el-table>
+      <div style="margin-top:8px"><el-button size="small" @click="loadTraces">刷新</el-button></div>
+    </el-card>
+    <el-card shadow="never">
       <template #header>检索调试 —— 输入问题查看完整检索链路（改写/通道/融合/重排/门控）</template>
       <div style="display:flex; gap:10px; margin-bottom:12px">
         <el-input v-model="dbgQuery" placeholder="输入要调试的问题，如：报销标准是多少" @keydown.enter="debug" />
@@ -87,6 +100,12 @@ import api from '../../api'
 
 const gaps = ref([]), pending = ref([]), disabled = ref([]), genId = ref(null)
 const dbgQuery = ref(''), dbgLoading = ref(false), dbg = ref(null)
+const traces = ref([]), tracesLoading = ref(false)
+async function loadTraces() {
+  tracesLoading.value = true
+  try { traces.value = await api.get('/rag/traces?limit=20') } catch { }
+  finally { tracesLoading.value = false }
+}
 async function debug() {
   if (!dbgQuery.value.trim()) return
   dbgLoading.value = true; dbg.value = null
@@ -113,4 +132,5 @@ async function review(r, ok) {
   ElMessage.success(ok ? '已采纳为正式知识' : '已拒绝'); load()
 }
 onMounted(load)
+onMounted(loadTraces)
 </script>

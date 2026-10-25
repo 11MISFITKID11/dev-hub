@@ -28,6 +28,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RagDebugController {
 
+    private final com.devhub.module.ai.infrastructure.trace.TraceService traceService;
+
+    /** 最近链路（Ops 页排障）：trace 落库后跨重启可查 */
+    @GetMapping("/traces")
+    public Result<List<Map<String, Object>>> traces(@RequestParam(defaultValue = "20") int limit) {
+        return Result.success(traceService.recentTraces(limit));
+    }
+
     private final ChatModelRegistry modelRegistry;
     private final MultiRetriever multiRetriever;
     private final Reranker reranker;

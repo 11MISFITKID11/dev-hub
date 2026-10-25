@@ -80,6 +80,7 @@ async function doLogin() {
   loading.value = true
   try {
     await store.login(u.value, p.value)
+    await store.loadPerms()   // 权限点就绪后再进应用，避免 v-perm 按钮被误删
     router.push('/ai/chat')
   } catch (e) {
     /* 拦截器已统一弹错，这里不再重复提示 */

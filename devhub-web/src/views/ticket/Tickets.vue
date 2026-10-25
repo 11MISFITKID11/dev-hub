@@ -144,11 +144,11 @@
               <el-radio-button value="agent">回复客户</el-radio-button>
               <el-radio-button value="internal">内部备注</el-radio-button>
             </el-radio-group>
-            <el-select v-model="transferTo" placeholder="转派给…" clearable size="small" style="width:150px; margin-left:auto"
+            <el-select v-model="transferTo" v-perm="'ticket:transfer'" placeholder="转派给…" clearable size="small" style="width:150px; margin-left:auto"
                        v-if="['PENDING','PROCESSING'].includes(cur.ticket.status)">
               <el-option v-for="a in agents" :key="a.username" :label="a.nickname || a.username" :value="a.username" />
             </el-select>
-            <el-button v-if="transferTo && transferTo !== cur.ticket.handler" size="small" @click="doTransfer">转派</el-button>
+            <el-button v-if="transferTo && transferTo !== cur.ticket.handler" v-perm="'ticket:transfer'" size="small" @click="doTransfer">转派</el-button>
           </div>
           <el-input v-model="replyText" type="textarea" :rows="4"
                     :placeholder="replyRole === 'internal' ? '内部备注（仅坐席可见，不通知客户，不暂停 SLA）' : '回复内容（结单时作为解决方案记录）'" />

@@ -38,6 +38,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/static/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // Prometheus 抓取端点：内网部署放行；公网生产应在网关层加 scrape token
+                        .requestMatchers("/actuator/prometheus").permitAll()
                         // 通知 SSE：EventSource 带不了头，token 走查询参数由 Controller 校验
                         .requestMatchers("/api/notifications/stream").permitAll()
                         .anyRequest().authenticated())

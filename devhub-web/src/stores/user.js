@@ -6,10 +6,12 @@ export const useUserStore = defineStore('user', {
     token: localStorage.getItem('dh_token') || '',
     username: (JSON.parse(localStorage.getItem('dh_user') || 'null') || {}).username || '',
     menus: (JSON.parse(localStorage.getItem('dh_user') || 'null') || {}).menus || [],
+    perms: (JSON.parse(localStorage.getItem('dh_user') || 'null') || {}).perms || [],
     dicts: JSON.parse(localStorage.getItem('dh_dicts') || '{}')
   }),
   getters: {
     isLogin: s => !!s.token,
+    hasPerm: s => p => s.perms.includes(p),
     menuTree: s => {
       const byParent = {}
       s.menus.forEach(m => (byParent[m.parent_id || 0] = byParent[m.parent_id || 0] || []).push(m))
@@ -37,9 +39,20 @@ export const useUserStore = defineStore('user', {
     async login(username, password, endpoint = '/auth/login') {
       const d = await api.post(endpoint, { username, password })
       this.token = d.token; this.username = d.username; this.menus = d.menus || []
+      this.perms = d.perms || []
       localStorage.setItem('dh_token', d.token)
-      localStorage.setItem('dh_user', JSON.stringify({ username: d.username, menus: d.menus }))
+      localStorage.setItem('dh_user', JSON.stringify({ username: d.username, menus: d.menus, perms: this.perms }))
       await this.loadDicts()
+    },
+    async loadPerms() {
+      // 登录响应不含 perms（老后端）时，登录后从 /me 拉取权限点
+      try {
+        const d = await api.get('/auth/me')
+        this.perms = d.perms || []
+        const u = JSON.parse(localStorage.getItem('dh_user') || '{}')
+        u.perms = this.perms
+        localStorage.setItem('dh_user', JSON.stringify(u))
+      } catch (e) { /* 静默 */ }
     },
     async loadDicts() {
       try {
@@ -49,7 +62,7 @@ export const useUserStore = defineStore('user', {
     },
     logout() {
       localStorage.removeItem('dh_token'); localStorage.removeItem('dh_user')
-      this.token = ''; this.menus = []; this.username = ''
+      this.token = ''; this.menus = []; this.username = ''; this.perms = []
     }
   }
 })

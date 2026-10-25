@@ -45,6 +45,7 @@ public class AgentOrchestrator {
 
     private final IntentRecognizer intentRecognizer;
     private final MemoryManager memoryManager;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
     private final MultiRetriever multiRetriever;
     private final Reranker reranker;
     private final RAGGenerator ragGenerator;
@@ -154,6 +155,7 @@ public class AgentOrchestrator {
                 // 实质未命中：无检索结果，或全部结果相关度过低（弱召回的无关内容）
                 ragMissed = ragContext.isBlank()
                         || sources.stream().allMatch(s -> s.getScore() < 0.35);
+                meters.counter("devhub.rag.gate", "result", ragMissed ? "refuse" : "pass").increment();
 
                 // 拒答 = 知识缺口：异步记录（高频缺口自动触发知识生产）
                 if (ragMissed) {
@@ -353,6 +355,11 @@ public class AgentOrchestrator {
             }
             ragContext = performRAG(request.getMessage(), queryVector, sources, traceId, steps,
                     historyContext);
+            // 检索门控指标（流式主路径）：过门控 / 拒答
+            meters.counter("devhub.rag.gate", "result",
+                    request.isEnableRag() && (ragContext.isBlank()
+                            || sources.stream().allMatch(s -> s.getScore() < 0.35)) ? "refuse" : "pass")
+                    .increment();
         }
 
         String fullContext = joinContext(ragContext, historyContext);

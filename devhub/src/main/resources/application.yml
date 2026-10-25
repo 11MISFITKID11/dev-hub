@@ -1,7 +1,7 @@
 # DevHub 宿主配置
 devhub:
   jwt:
-    secret: ${DEVHUB_JWT_SECRET:devhub-skeleton-secret-key-please-change-in-prod-32bytes}
+    secret: ${DEVHUB_JWT_SECRET:devhub-local-dev-only-secret-0123456789abcdef}
     ttl-hours: 24
 
 server:

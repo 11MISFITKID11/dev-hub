@@ -19,6 +19,21 @@ import java.util.List;
 @Service
 public class IntentRecognizer {
 
+    @org.springframework.context.annotation.Lazy
+    private final com.devhub.module.ai.infrastructure.llm.ModelRouter modelRouter;
+    private final org.springframework.data.redis.core.StringRedisTemplate redis;
+
+    public IntentRecognizer(@org.springframework.context.annotation.Lazy
+                            com.devhub.module.ai.infrastructure.llm.ModelRouter modelRouter,
+                            org.springframework.data.redis.core.StringRedisTemplate redis) {
+        this.modelRouter = modelRouter;
+        this.redis = redis;
+    }
+
+    /** 可推荐工具目录（与 ToolRegistry 注册名一致） */
+    private static final String TOOL_CATALOG =
+            "calculator(计算),search(站内知识搜索),database_query(SQL查询),query_order(订单物流),create_ticket(建工单),rag_answerer(知识问答)";
+
     /**
      * 识别用户意图
      *
@@ -87,17 +102,62 @@ public class IntentRecognizer {
     }
 
     /**
-     * 兜底：规则未命中按知识问答处理（零成本；原 LLM 兜底因收益不抵 RTT 已移除）
+     * 兜底（仅 REACT 场景消费；DIRECT 快路径不经过此处）：
+     * 规则未命中 → 小模型推荐工具集（Redis 24h 缓存），失败/超时回退默认 KNOWLEDGE_QA 零工具。
      */
     private IntentResult llmBasedRecognize(String input) {
-        log.info("规则未命中，按默认意图处理（KNOWLEDGE_QA）: input={}", truncate(input, 60));
+        String key = "intent:llm:" + Math.abs((input == null ? "" : input).hashCode());
+        try {
+            String cached = redis.opsForValue().get(key);
+            if (cached != null) {
+                List<String> tools = parseTools(cached);
+                return knowledageResult(tools);
+            }
+        } catch (Exception ignored) { }
+        try {
+            String answer = modelRouter.call("""
+                    你是客服系统的意图分类器。根据客户消息从工具目录中推荐 0-2 个最可能用到的工具。
+                    工具目录：%s
+                    只输出 JSON：{"tools": ["工具名"], "type": "TOOL_USE|KNOWLEDGE_QA"}
+
+                    客户消息：%s
+                    """.formatted(TOOL_CATALOG, input == null ? "" : input), null);
+            List<String> tools = parseTools(answer);
+            try {
+                redis.opsForValue().set(key, String.join(",", tools), java.time.Duration.ofHours(24));
+            } catch (Exception ignored) { }
+            log.info("LLM 意图兜底: tools={}", tools);
+            return knowledageResult(tools);
+        } catch (Exception e) {
+            log.warn("LLM 意图兜底失败，回退默认 KNOWLEDGE_QA: {}", e.getMessage());
+            return knowledageResult(List.of());
+        }
+    }
+
+    private IntentResult knowledageResult(List<String> tools) {
         return IntentResult.builder()
-                .intentType("KNOWLEDGE_QA")
+                .intentType(tools.isEmpty() ? "KNOWLEDGE_QA" : "TOOL_USE")
                 .agentMode(AgentMode.REACT)
                 .confidence(0.5)
                 .needsRag(true)
-                .suggestedTools(List.of())
+                .suggestedTools(tools)
                 .build();
+    }
+
+    /** 从 LLM 输出解析工具名列表（容错：截取 JSON 数组段；输出不合法返回空） */
+    private List<String> parseTools(String answer) {
+        try {
+            if (answer == null) return List.of();
+            int s = answer.indexOf('[');
+            int e = answer.indexOf(']');
+            if (s < 0 || e <= s) return List.of();
+            String inner = answer.substring(s + 1, e).replace("\"", "");
+            return java.util.Arrays.stream(inner.split(","))
+                    .map(String::trim).filter(t -> !t.isEmpty() && TOOL_CATALOG.contains(t + "("))
+                    .limit(2).toList();
+        } catch (Exception ex) {
+            return List.of();
+        }
     }
 
     /** 保留映射工具方法供规则层扩展使用 */

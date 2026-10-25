@@ -1,9 +1,9 @@
 package com.devhub.module.ai.service.tool.builtin;
 
 import com.devhub.module.ai.service.tool.BaseTool;
+import com.devhub.module.ai.service.tool.OrderDataProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +12,7 @@ import java.util.Map;
 
 /**
  * 订单与物流查询工具（Agentic 客服）
- * <p>查询 mock_order/mock_logistics（数据与云帆科技知识库条款一致）。
+ * <p>数据源走 {@link OrderDataProvider} 抽象（默认 mock 演示库，生产可换 ERP 实现零改工具层）。
  * 数据隔离：仅可查本人订单（管理员例外），订单号是客户身份外的第二重校验。
  */
 @Slf4j
@@ -20,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrderQueryTool extends BaseTool {
 
-    private final JdbcTemplate jdbc;
+    private final OrderDataProvider orders;
 
     @Override
     public String getName() { return "query_order"; }
@@ -53,30 +53,26 @@ public class OrderQueryTool extends BaseTool {
     @Override
     protected String doExecute(Map<String, Object> parameters) {
         String orderNo = String.valueOf(parameters.get("orderNo")).trim().toUpperCase();
-        Map<String, Object> order = jdbc.queryForMap(
-                "SELECT order_no, username, status, carrier, tracking_no, items, amount, address, eta, signed_at "
-                        + "FROM mock_order WHERE order_no = ?", orderNo);
+        OrderDataProvider.OrderInfo o = orders.queryByOrderNo(orderNo);
+        if (o == null) return "未找到订单：" + orderNo + "，请核对订单号。";
         String me = SecurityContextHolder.getContext().getAuthentication().getName();
         boolean admin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().contains("ADMIN"));
-        if (!admin && !me.equals(order.get("username"))) {
+        if (!admin && !me.equals(o.username())) {
             return "无权查看该订单：订单 " + orderNo + " 不属于当前账号，请核对订单号。";
         }
-        List<Map<String, Object>> tracks = jdbc.queryForList(
-                "SELECT event_time, event FROM mock_logistics WHERE order_no = ? ORDER BY event_time", orderNo);
         StringBuilder sb = new StringBuilder();
-        sb.append("订单 ").append(order.get("order_no")).append("：")
-                .append(statusCn(String.valueOf(order.get("status"))))
-                .append("；商品：").append(order.get("items"))
-                .append("；金额：").append(order.get("amount")).append(" 元")
-                .append("；承运：").append(order.get("carrier")).append(" ")
-                .append(order.get("tracking_no"));
-        if (order.get("eta") != null) sb.append("；预计送达：").append(order.get("eta"));
-        if (order.get("signed_at") != null) {
-            sb.append("；签收时间：").append(order.get("signed_at"))
+        sb.append("订单 ").append(o.orderNo()).append("：").append(statusCn(o.status()))
+                .append("；商品：").append(o.items())
+                .append("；金额：").append(o.amount()).append(" 元")
+                .append("；承运：").append(o.carrier()).append(" ").append(o.trackingNo());
+        if (o.eta() != null) sb.append("；预计送达：").append(o.eta());
+        if (o.signedAt() != null) {
+            sb.append("；签收时间：").append(o.signedAt())
                     .append("（7 天无理由退货自签收之日起算 7 个自然日）");
         }
-        if (!tracks.isEmpty()) {
+        List<Map<String, Object>> tracks = o.logistics();
+        if (tracks != null && !tracks.isEmpty()) {
             sb.append("\n物流轨迹：");
             for (Map<String, Object> t : tracks) {
                 sb.append("\n- ").append(t.get("event_time")).append(" ").append(t.get("event"));
@@ -86,7 +82,7 @@ public class OrderQueryTool extends BaseTool {
     }
 
     private String statusCn(String s) {
-        return switch (s) {
+        return switch (s == null ? "" : s) {
             case "PAID" -> "已付款/备货中";
             case "SHIPPED", "IN_TRANSIT" -> "运输中";
             case "DELIVERED" -> "已签收";

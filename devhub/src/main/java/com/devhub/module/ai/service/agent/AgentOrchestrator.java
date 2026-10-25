@@ -312,6 +312,18 @@ public class AgentOrchestrator {
         String traceId = traceService.startTrace("chat_stream");
         com.devhub.module.ai.infrastructure.llm.UsageContext.begin();
         String conversationId = resolveConversationId(request.getConversationId());
+
+        // 输入安全栏（两道防线：正则 + 可疑样本小模型分类）——流式主路径此前未接（W3-6 补）
+        com.devhub.module.ai.infrastructure.security.PromptGuard.ScanResult inputScan =
+                promptGuard.scanInput(request.getMessage());
+        if (inputScan.blocked()) {
+            traceService.addSpan(traceId, "input_guard", Map.of("hits", inputScan.hits().size()));
+            traceService.endTrace(traceId);
+            return Flux.just("__META__{\"conversationId\":\"" + conversationId + "\",\"refused\":true}",
+                    "检测到潜在的提示注入风险，该请求已被安全策略拦截。请换用正常的知识库提问方式。",
+                    "[DONE]");
+        }
+
         // 历史先于本轮消息保存前读取（同 chat()：避免把刚保存的问题当"参考资料"）
         String historyContext = buildHistoryContext(conversationId);
 

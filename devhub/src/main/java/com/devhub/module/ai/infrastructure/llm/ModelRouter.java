@@ -43,18 +43,26 @@ public class ModelRouter {
      * @return 模型回答文本
      */
     public String call(String promptText, String requestedModel) {
-        return callLimiter.guard(() -> doCall(promptText, requestedModel));
+        return call(promptText, requestedModel, null);
     }
 
-    private String doCall(String promptText, String requestedModel) {
+    /** 带请求级参数覆盖（temperature）的同步调用 */
+    public String call(String promptText, String requestedModel, Double temperature) {
+        return callLimiter.guard(() -> doCall(promptText, requestedModel, temperature));
+    }
+
+    private String doCall(String promptText, String requestedModel, Double temperature) {
         List<String> chain = resolveChain(requestedModel);
         String lastError = null;
 
         for (String name : chain) {
             try {
-                ChatResponse response = registry.get(name).chat(ChatRequest.builder()
-                        .messages(List.of(dev.langchain4j.data.message.UserMessage.from(promptText)))
-                        .build());
+                ChatRequest.Builder request = ChatRequest.builder()
+                        .messages(List.of(dev.langchain4j.data.message.UserMessage.from(promptText)));
+                if (temperature != null) {
+                    request.temperature(temperature);
+                }
+                ChatResponse response = registry.get(name).chat(request.build());
                 circuitBreaker.recordSuccess();
                 recordUsage(response);
                 log.debug("模型调用成功: {}", name);
@@ -124,11 +132,16 @@ public class ModelRouter {
      * @return 逐 token 的回答流
      */
     public Flux<String> stream(String promptText, String requestedModel) {
+        return stream(promptText, requestedModel, null);
+    }
+
+    /** 带请求级参数覆盖（temperature）的流式调用 */
+    public Flux<String> stream(String promptText, String requestedModel, Double temperature) {
         // 订阅时获取许可，流结束时释放——SSE 长流也计入并发额度
         return Flux.defer(() -> {
             callLimiter.acquire();
             try {
-                return doStream(promptText, requestedModel)
+                return doStream(promptText, requestedModel, temperature)
                         .doFinally(signal -> callLimiter.release());
             } catch (Exception e) {
                 callLimiter.release();
@@ -137,12 +150,17 @@ public class ModelRouter {
         });
     }
 
-    private Flux<String> doStream(String promptText, String requestedModel) {
+    private Flux<String> doStream(String promptText, String requestedModel, Double temperature) {
         String name = resolveChain(requestedModel).get(0);
         StreamingChatModel model = registry.streaming(name);
         log.debug("流式调用模型: {}", name);
 
-        return Flux.create(emitter -> model.chat(promptText, new StreamingChatResponseHandler() {
+        ChatRequest.Builder request = ChatRequest.builder()
+                .messages(List.of(dev.langchain4j.data.message.UserMessage.from(promptText)));
+        if (temperature != null) {
+            request.temperature(temperature);
+        }
+        return Flux.create(emitter -> model.chat(request.build(), new StreamingChatResponseHandler() {
             @Override
             public void onPartialResponse(String token) {
                 emitter.next(token);

@@ -31,4 +31,11 @@ public interface SupportTicketMapper extends BaseMapper<SupportTicket> {
     @Select("SELECT DATE_FORMAT(create_time, '%m-%d') AS d, COUNT(*) AS created FROM support_ticket "
             + "WHERE deleted = 0 AND create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY DATE_FORMAT(create_time, '%m-%d')")
     List<Map<String, Object>> trend7d();
+
+    @Select("SELECT satisfaction AS k, COUNT(*) AS v FROM support_ticket "
+            + "WHERE deleted = 0 AND satisfaction IS NOT NULL GROUP BY satisfaction ORDER BY k DESC")
+    List<Map<String, Object>> countBySatisfaction();
+
+    @Select("SELECT COUNT(*) AS v FROM support_ticket WHERE deleted = 0 AND qc_score IS NOT NULL")
+    long qcDoneCount();
 }

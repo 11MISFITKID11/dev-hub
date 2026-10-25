@@ -34,28 +34,16 @@ public class ChatModelRegistry {
     private static final int EMBED_BATCH_SIZE = 64;
 
     private final LlmProperties properties;
-    private final Map<String, ChatModel> chatModels = new LinkedHashMap<>();
-    private final Map<String, StreamingChatModel> streamingModels = new LinkedHashMap<>();
+    /** 运行时模型表（DB 配置叠加后可整体热替换，volatile 保证读线程拿到完整快照） */
+    private volatile Map<String, ChatModel> chatModels = new LinkedHashMap<>();
+    private volatile Map<String, StreamingChatModel> streamingModels = new LinkedHashMap<>();
+    private volatile String primaryName;
+    private volatile List<String> fallbackChain = new ArrayList<>();
     private EmbeddingModel embeddingModel;
 
     public ChatModelRegistry(LlmProperties properties) {
         this.properties = properties;
-        properties.getModels().forEach((name, spec) -> {
-            if (spec.getApiKey() == null || spec.getApiKey().isBlank()) {
-                log.info("跳过未配置 api-key 的模型: {} ({})", name, spec.getDescription());
-                return;
-            }
-            chatModels.put(name, buildChatModel(spec));
-            streamingModels.put(name, buildStreamingModel(spec));
-            log.info("注册模型: {} -> {} @ {}", name, spec.getModel(), spec.getBaseUrl());
-        });
-
-        if (!chatModels.containsKey(properties.getPrimary())) {
-            throw new IllegalStateException(
-                    "主模型 [" + properties.getPrimary() + "] 未注册，请检查 agent.llm 配置（可用: " + chatModels.keySet() + "）");
-        }
-        log.info("多模型注册完成: primary={}, fallback={}, 可用={}",
-                properties.getPrimary(), properties.getFallback(), chatModels.keySet());
+        rebuild(properties.getModels(), properties.getPrimary(), properties.getFallback());
 
         LlmProperties.EmbeddingSpec emb = properties.getEmbedding();
         if (emb != null && emb.getApiKey() != null && !emb.getApiKey().isBlank()) {
@@ -71,6 +59,39 @@ public class ChatModelRegistry {
         } else {
             log.warn("未配置向量模型 api-key，文档向量化与语义检索不可用");
         }
+    }
+
+    /**
+     * 整体重建模型注册表（启动时用环境变量配置；DB 模型配置变更后由 ModelConfigService 调用热重建）。
+     * 先在局部 Map 构建完整快照再整体替换，读侧无锁；主模型缺失直接抛错由调用方决定回退策略。
+     */
+    public synchronized void rebuild(Map<String, LlmProperties.ModelSpec> specs, String primary, List<String> fallback) {
+        Map<String, ChatModel> chat = new LinkedHashMap<>();
+        Map<String, StreamingChatModel> stream = new LinkedHashMap<>();
+        specs.forEach((name, spec) -> {
+            if (spec.getApiKey() == null || spec.getApiKey().isBlank()) {
+                log.info("跳过未配置 api-key 的模型: {} ({})", name, spec.getDescription());
+                return;
+            }
+            chat.put(name, buildChatModel(spec));
+            stream.put(name, buildStreamingModel(spec));
+            log.info("注册模型: {} -> {} @ {}", name, spec.getModel(), spec.getBaseUrl());
+        });
+        if (!chat.containsKey(primary)) {
+            throw new IllegalStateException(
+                    "主模型 [" + primary + "] 未注册，请检查模型配置（可用: " + chat.keySet() + "）");
+        }
+        List<String> chain = new ArrayList<>();
+        for (String name : fallback) {
+            if (chat.containsKey(name) && !chain.contains(name)) {
+                chain.add(name);
+            }
+        }
+        this.chatModels = chat;
+        this.streamingModels = stream;
+        this.primaryName = primary;
+        this.fallbackChain = chain;
+        log.info("多模型注册完成: primary={}, fallback={}, 可用={}", primary, chain, chat.keySet());
     }
 
     /**
@@ -144,28 +165,22 @@ public class ChatModelRegistry {
     }
 
     public String primaryName() {
-        return properties.getPrimary();
+        return primaryName;
     }
 
     /** 轻量模型：降级链第一个可用模型，用于意图识别、摘要等低价值调用；无降级则用主模型 */
     public String lightModelName() {
-        for (String name : properties.getFallback()) {
+        for (String name : fallbackChain) {
             if (chatModels.containsKey(name)) {
                 return name;
             }
         }
-        return properties.getPrimary();
+        return primaryName;
     }
 
     /** 有效的降级链（仅保留已注册模型，主模型本身不在其中） */
     public List<String> fallbackNames() {
-        List<String> chain = new ArrayList<>();
-        for (String name : properties.getFallback()) {
-            if (chatModels.containsKey(name) && !chain.contains(name)) {
-                chain.add(name);
-            }
-        }
-        return chain;
+        return new ArrayList<>(fallbackChain);
     }
 
     public LlmProperties.ModelSpec spec(String name) {

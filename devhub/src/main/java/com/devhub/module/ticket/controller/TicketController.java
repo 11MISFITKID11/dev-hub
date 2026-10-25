@@ -61,6 +61,16 @@ public class TicketController {
         return Result.success(ticketService.stats());
     }
 
+    /** 质检统计页：已质检工单分页（管理员） */
+    @GetMapping("/qc/list")
+    public Result<Page<Map<String, Object>>> qcList(@RequestParam(defaultValue = "1") long page,
+                                                    @RequestParam(defaultValue = "10") long size,
+                                                    @RequestParam(required = false) Integer minScore,
+                                                    @RequestParam(required = false) String category) {
+        if (!isAdmin()) return Result.fail(403, "仅管理员可访问");
+        return Result.success(ticketService.qcPage(page, size, minScore, category));
+    }
+
     @GetMapping("/{id}")
     public Result<Map<String, Object>> detail(@PathVariable Long id) {
         return Result.success(ticketService.detail(id, me(), isAdmin()));

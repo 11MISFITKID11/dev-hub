@@ -18,10 +18,9 @@ export const useUserStore = defineStore('user', {
         children: (byParent[m.id] || []).sort((a, b) => a.sort - b.sort)
       }))
     },
-    // 可访问路由集合：取菜单叶子节点的 path（父节点 path 如 /ai 不是真实路由）
+    // 可访问路由集合：所有真实 path（父菜单挂了子菜单后自身 path 也要放行，如 系统管理→模型配置）
     allowedPaths() {
-      const leaf = this.menus.filter(m => !this.menus.some(k => k.parent_id === m.id))
-      const set = new Set(leaf.map(m => m.path).filter(Boolean))
+      const set = new Set(this.menus.map(m => m.path).filter(Boolean))
       set.add('/metrics') // 无菜单入口的隐藏页
       return set
     },

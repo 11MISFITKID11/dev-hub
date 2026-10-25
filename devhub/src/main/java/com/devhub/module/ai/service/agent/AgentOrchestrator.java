@@ -358,6 +358,7 @@ public class AgentOrchestrator {
                 ? buildNoResultPrompt(request.getMessage(), fullContext)
                 : buildDirectPrompt(request.getMessage(), ragContext, historyContext);
         String forceModel = request.getModelOptions() != null ? request.getModelOptions().getModel() : null;
+        Double temperature = request.getModelOptions() != null ? request.getModelOptions().getTemperature() : null;
 
         steps.add(ChatResponse.ThinkingStep.builder()
                 .step(steps.size() + 1)
@@ -384,7 +385,7 @@ public class AgentOrchestrator {
         StringBuilder replyBuffer = new StringBuilder();
         final List<Float> finalVector = queryVector;
         final String finalRagContext = ragContext;
-        return meta.concatWith(modelRouter.stream(promptText, forceModel))
+        return meta.concatWith(modelRouter.stream(promptText, forceModel, temperature))
                 .filter(text -> !text.isEmpty())
                 .doOnNext(replyBuffer::append)
                 .doOnComplete(() -> {
@@ -582,7 +583,8 @@ public class AgentOrchestrator {
             }
             case DIRECT -> {
                 String reply = directChat(request.getMessage(), ragContext, historyContext,
-                        forceModel, ragMissed);
+                        forceModel, request.getModelOptions() != null ? request.getModelOptions().getTemperature() : null,
+                        ragMissed);
                 yield ChatResponse.builder()
                         .reply(reply)
                         .build();
@@ -594,11 +596,11 @@ public class AgentOrchestrator {
      * 直接对话模式（不经过 Agent 编排）
      */
     private String directChat(String message, String ragContext, String historyContext,
-                              String forceModel, boolean ragMissed) {
+                              String forceModel, Double temperature, boolean ragMissed) {
         String promptText = ragMissed
                 ? buildNoResultPrompt(message, joinContext(ragContext, historyContext))
                 : buildDirectPrompt(message, ragContext, historyContext);
-        return modelRouter.call(promptText, forceModel);
+        return modelRouter.call(promptText, forceModel, temperature);
     }
 
     /**

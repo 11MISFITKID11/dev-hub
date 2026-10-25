@@ -234,7 +234,7 @@ public class TicketService {
         }
     }
 
-    /** 工单质量看板：状态/分类/优先级分布 + 满意度/质检均值 + 低分工单 + 7 日趋势 */
+    /** 工单质量看板：状态/分类/优先级分布 + 满意度/质检均值 + 低分工单 + 7 日趋势 + 满意度分布/质检覆盖 */
     public Map<String, Object> stats() {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("byStatus", ticketMapper.countByStatus());
@@ -243,7 +243,38 @@ public class TicketService {
         vo.put("overall", ticketMapper.overall());
         vo.put("lowQc", ticketMapper.lowQcTop5());
         vo.put("trend7d", ticketMapper.trend7d());
+        vo.put("satisfactionDist", ticketMapper.countBySatisfaction());
+        vo.put("qcDone", ticketMapper.qcDoneCount());
         return vo;
+    }
+
+    /** 质检统计页：已质检工单分页（低分优先），支持分数区间过滤 */
+    public Page<Map<String, Object>> qcPage(long page, long size, Integer minScore, String category) {
+        LambdaQueryWrapper<SupportTicket> w = new LambdaQueryWrapper<SupportTicket>()
+                .isNotNull(SupportTicket::getQcScore)
+                .ge(minScore != null, SupportTicket::getQcScore, minScore)
+                .eq(notBlank(category), SupportTicket::getCategory, category)
+                .orderByAsc(SupportTicket::getQcScore);
+        Page<SupportTicket> r = ticketMapper.selectPage(new Page<>(page, size), w);
+        List<Map<String, Object>> rows = r.getRecords().stream().map(t -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", t.getId());
+            m.put("ticketNo", t.getTicketNo());
+            m.put("username", t.getUsername());
+            m.put("title", t.getTitle());
+            m.put("category", t.getCategory());
+            m.put("priority", t.getPriority());
+            m.put("status", t.getStatus());
+            m.put("handler", t.getHandler());
+            m.put("qcScore", t.getQcScore());
+            m.put("qcResult", t.getQcResult());
+            m.put("satisfaction", t.getSatisfaction());
+            m.put("updateTime", t.getUpdateTime());
+            return m;
+        }).toList();
+        Page<Map<String, Object>> out = new Page<>(r.getCurrent(), r.getSize(), r.getTotal());
+        out.setRecords(rows);
+        return out;
     }
 
     private boolean notBlank(String s) { return s != null && !s.isBlank(); }

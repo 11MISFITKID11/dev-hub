@@ -1,5 +1,29 @@
 <template>
-  <div style="display:flex; gap:14px; height: calc(100vh - 130px)">
+  <div>
+    <!-- 接待台头部 + 模型/参数工具栏 -->
+    <div class="desk-head">
+      <div>
+        <div class="desk-title">AI 客服接待台</div>
+        <div class="desk-sub">基于已向量化的客服知识片段回答客户问题 · 拒答不编造，答不了转人工</div>
+      </div>
+      <div class="desk-tools">
+        <template v-if="isAdminSide">
+          <el-select v-model="modelName" size="small" style="width:168px" placeholder="默认模型" clearable>
+            <el-option v-for="m in models" :key="m.name" :value="m.name" :label="m.name">
+              <span>{{ m.name }}</span><span class="m-desc">{{ m.description }}</span>
+            </el-option>
+          </el-select>
+          <div class="temp-box">
+            <span class="temp-lbl">温度</span>
+            <el-slider v-model="temperature" :min="0" :max="1" :step="0.1" :show-tooltip="false" style="width:84px" />
+            <span class="temp-val dh-num">{{ temperature.toFixed(1) }}</span>
+          </div>
+        </template>
+        <el-switch v-model="ragOn" active-text="知识库检索" size="small" />
+      </div>
+    </div>
+
+    <div style="display:flex; gap:14px; height: calc(100vh - 196px)">
     <!-- 会话列表 -->
     <div style="width:216px; flex-shrink:0; padding-right:10px; display:flex; flex-direction:column">
       <el-button type="primary" size="small" style="margin-bottom:10px; border-radius:10px" @click="newConv">＋ 新会话</el-button>
@@ -13,13 +37,23 @@
     <!-- 对话区 -->
     <div style="flex:1; display:flex; flex-direction:column; min-width:0">
       <div ref="listEl" style="flex:1; overflow-y:auto; padding-right:8px">
-        <div v-if="!msgs.length" style="text-align:center; padding-top:64px">
-          <el-icon :size="40" style="color:var(--el-color-primary); margin-bottom:14px"><ChatDotRound /></el-icon>
-          <div style="color:var(--el-text-color-primary); font-size:15px; font-weight:600; margin-bottom:6px">问点什么吧</div>
-          <div style="color:var(--el-text-color-secondary); font-size:13px; margin-bottom:18px">
-            基于已上传文档作答 · 每句带出处 · 拒答不编造
+        <!-- 服务首页 hero：大输入框直问 -->
+        <div v-if="!msgs.length" class="hero">
+          <div class="hero-title">您好，需要什么帮助？</div>
+          <div class="hero-sub">可以咨询产品、订单、退款、部署和售后问题，回答基于已启用知识库</div>
+          <div class="hero-box">
+            <el-input
+              v-model="input" type="textarea" :rows="4" maxlength="2000" resize="none"
+              placeholder="请描述您的问题…" :disabled="streaming"
+              @keydown.ctrl.enter.prevent="send" />
           </div>
-          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; padding:0 24px">
+          <div class="hero-foot">
+            <span class="hero-hint">Ctrl + Enter 发送</span>
+            <span class="hero-count dh-num">{{ input.length }}/2000</span>
+            <el-button v-if="!streaming" type="primary" round :disabled="!input.trim()" @click="send">发送问题</el-button>
+            <el-button v-else type="danger" round @click="abort">停止</el-button>
+          </div>
+          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:26px">
             <span v-for="q in suggestions" :key="q" class="sug-chip" @click="input = q">{{ q }}</span>
           </div>
         </div>
@@ -36,23 +70,17 @@
             </template>
           </div>
         </div>
-        <div v-if="streaming && !msgs.length" style="color:var(--el-text-color-secondary); font-size:12.5px; padding:10px 0">
-          <el-icon class="is-loading"><Loading /></el-icon> 思考中…
-        </div>
       </div>
       <div v-if="curSources.length" style="padding:8px 0; border-top:1px solid var(--el-border-color-lighter); display:flex; gap:8px; flex-wrap:wrap">
         <el-tag v-for="(s, i) in curSources" :key="i" size="small" type="success" style="cursor:pointer" @click="srcOpen = s">
           📕 {{ (s.fileName || '').slice(0, 16) }} · {{ Math.round((s.score || 0) * 100) }}%
         </el-tag>
       </div>
-      <div style="display:flex; gap:10px; padding-top:10px">
+      <div v-if="msgs.length" style="display:flex; gap:10px; padding-top:10px">
         <el-input v-model="input" :disabled="streaming" type="textarea" :autosize="{ minRows: 1, maxRows: 5 }"
                   placeholder="输入问题，Enter 发送 · Shift+Enter 换行" @keydown.enter.exact.prevent="send" />
         <el-button v-if="!streaming" type="primary" @click="send" :disabled="!input.trim()" style="height:auto">发送</el-button>
         <el-button v-else type="danger" @click="abort" style="height:auto">停止</el-button>
-      </div>
-      <div style="display:flex; align-items:center; gap:8px; padding-top:6px">
-        <el-switch v-model="ragOn" active-text="知识库检索" size="small" />
       </div>
     </div>
 
@@ -73,24 +101,47 @@
         <el-button type="primary" :loading="tkCreating" @click="submitTicket">提交工单</el-button>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ChatDotRound } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 defineOptions({ name: 'ChatPage' })
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import api from '../../api'
+import { useUserStore } from '../../stores/user'
 
+const store = useUserStore()
+// 管理侧才展示模型/温度参数；客户门户保持纯问答界面
+const isAdminSide = computed(() => store.allowedPaths.has('/tickets') || store.allowedPaths.has('/dashboard'))
 const convs = ref([]), cur = ref(null), msgs = ref([])
 const suggestions = ['日志打印有哪些强制规约？', 'HashMap 遍历用 keySet 还是 entrySet？', '为什么禁止使用 Executors 创建线程池？']
 const input = ref(''), streaming = ref(false), ragOn = ref(true)
 const listEl = ref(), ctrl = ref(null), srcOpen = ref(null)
 const srcDrawer = ref(false)
+
+/* ---- 模型与参数工具栏（持久化，随请求下发 modelOptions） ---- */
+const models = ref([]), modelName = ref(''), temperature = ref(0.7)
+try {
+  const saved = JSON.parse(localStorage.getItem('dh_chat_opts') || '{}')
+  if (saved.model !== undefined) modelName.value = saved.model
+  if (saved.temperature !== undefined) temperature.value = saved.temperature
+  if (saved.rag !== undefined) ragOn.value = saved.rag
+} catch (e) { /* 忽略坏数据 */ }
+watch([modelName, temperature, ragOn], () => {
+  localStorage.setItem('dh_chat_opts', JSON.stringify({ model: modelName.value, temperature: temperature.value, rag: ragOn.value }))
+}, { deep: true })
+async function loadModels() {
+  try {
+    const d = await api.get('/v1/models')
+    models.value = d.models || []
+  } catch (e) { /* 工具栏降级：无模型列表时用默认路由 */ }
+}
+
 const curSources = computed(() => {
   const last = [...msgs.value].reverse().find(m => m.role === 'ASSISTANT')
   return (last && last.sources) || []
@@ -163,7 +214,11 @@ async function send() {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({
         conversationId: cur.value && cur.value.id,
-        message: q, enableRag: ragOn.value, mode: 'DIRECT'
+        message: q, enableRag: ragOn.value, mode: 'DIRECT',
+        modelOptions: {
+          model: modelName.value || undefined,
+          temperature: temperature.value
+        }
       }),
       signal: ctrl.value.signal
     })
@@ -214,10 +269,31 @@ async function send() {
 }
 function abort() { if (ctrl.value) ctrl.value.abort() }
 
-onMounted(loadConvs)
+onMounted(() => { loadConvs(); loadModels() })
 </script>
 
 <style scoped>
+/* 接待台头部 */
+.desk-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 14px; padding: 2px 2px 12px;
+}
+.desk-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+.desk-sub { color: var(--el-text-color-secondary); font-size: 12.5px; margin-top: 3px; }
+.desk-tools { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+.m-desc { float: right; color: var(--el-text-color-secondary); font-size: 12px; margin-left: 12px; }
+.temp-box { display: flex; align-items: center; gap: 6px; }
+.temp-lbl { font-size: 12.5px; color: var(--el-text-color-secondary); }
+.temp-val { font-size: 12.5px; min-width: 22px; }
+
+/* 服务首页 hero */
+.hero { max-width: 640px; margin: 4vh auto 0; text-align: center; }
+.hero-title { font-size: 22px; font-weight: 700; letter-spacing: .4px; }
+.hero-sub { color: var(--el-text-color-secondary); font-size: 13px; margin: 8px 0 22px; }
+.hero-box { text-align: left; }
+.hero-foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; justify-content: flex-end; }
+.hero-hint { color: var(--el-text-color-placeholder); font-size: 12px; margin-right: auto; }
+.hero-count { color: var(--el-text-color-secondary); font-size: 12px; }
 .fb { cursor:pointer; opacity:.45; transition:opacity .15s ease; user-select:none }
 .fb:hover { opacity:.9 }
 .fb.on { opacity:1; transform:scale(1.15) }

@@ -1,6 +1,9 @@
 # Java 构建产物
 devhub/target/
 devhub/build/
+build/
+#! 中间件密钥环境文件永不入库
+*.env
 *.class
 *.jar
 

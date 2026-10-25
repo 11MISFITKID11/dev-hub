@@ -180,14 +180,32 @@ html.dark .el-table { --el-table-row-hover-bg-color: rgba(79, 148, 234, 0.10); }
   border-right: none;
   background: transparent;
 }
+/* 选中态对齐客户门户顶栏：蓝字 + 浅蓝底 + 左侧指示条（顶栏下划线的纵向转译） */
 .dh-rail .el-menu-item.is-active {
-  background: var(--el-color-primary);
-  color: #fff;
+  background: rgba(0, 113, 227, 0.09);
+  color: var(--el-color-primary);
+  font-weight: 600;
   border-radius: 9px;
+  position: relative;
 }
+.dh-rail .el-menu-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--el-color-primary);
+}
+html.dark .dh-rail .el-menu-item.is-active { background: rgba(79, 148, 234, 0.16); }
 .dh-rail .el-menu-item { border-radius: 9px; margin: 2px 8px; }
 .dh-rail .el-sub-menu__title { border-radius: 9px; margin: 2px 8px; }
 .dh-rail .el-sub-menu .el-menu { background: transparent; }
+.dh-rail .el-sub-menu__title { font-size: 13.5px; font-weight: 500; color: var(--el-text-color-primary); }
+.dh-rail .el-sub-menu__title .el-icon { color: var(--el-text-color-secondary); }
+.dh-rail .el-sub-menu .el-menu-item { font-size: 14px; color: var(--el-text-color-regular); }
 html.dark .dh-rail .el-menu { --el-menu-hover-bg-color: rgba(79, 148, 234, 0.14); }
 
 /* ---- 顶栏：Chrome Material ---- */

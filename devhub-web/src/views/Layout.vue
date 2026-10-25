@@ -38,11 +38,21 @@
   <!-- 管理后台：侧边栏信息架构 -->
   <el-container v-else style="height: 100vh">
     <el-aside :width="collapsed ? '64px' : '220px'" class="dh-rail" style="transition: width .25s">
-      <div class="brand" @click="collapsed = !collapsed">
-        <span class="blogo">HH</span>
-        <span v-if="!collapsed" class="bname">HelpHub</span>
+      <div class="brand" :class="{ slim: collapsed }" @click="collapsed = !collapsed">
+        <span class="robot-avatar" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="34" height="34">
+            <circle cx="20" cy="20" r="19" fill="#d6e6ff"/>
+            <circle cx="20" cy="20" r="14.5" fill="#0b4fd9"/>
+            <line x1="20" y1="9" x2="20" y2="4.8" stroke="#0b4fd9" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="20" cy="3.4" r="1.7" fill="#0b4fd9"/>
+            <rect x="12" y="14.2" width="16" height="11.6" rx="4" fill="#fff"/>
+            <circle cx="16.2" cy="19.6" r="1.9" fill="#0b4fd9"/>
+            <circle cx="23.8" cy="19.6" r="1.9" fill="#0b4fd9"/>
+            <rect x="16.5" y="22.6" width="7" height="1.7" rx="0.85" fill="#0b4fd9"/>
+          </svg>
+        </span>
+        <span v-if="!collapsed" class="bname">智能客服中心</span>
         <el-icon v-if="!collapsed" style="margin-left:auto"><Fold /></el-icon>
-        <el-icon v-else style="margin-left:auto"><Expand /></el-icon>
       </div>
       <el-menu :default-active="$route.path" :collapse="collapsed" router style="border-right: none">
         <template v-for="m in store.menuTree" :key="m.id">
@@ -151,9 +161,10 @@ function onCmd(cmd) {
 </script>
 
 <style scoped>
-.brand { display: flex; align-items: center; gap: 8px; padding: 14px 16px; cursor: pointer; }
-.blogo { width: 30px; height: 30px; border-radius: 9px; background: var(--el-color-primary); color: #fff; font-weight: 800; font-size: 13px; line-height: 30px; text-align: center; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
-.bname { font-weight: 700; font-size: 15px; letter-spacing: .3px; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 13px 16px 12px; cursor: pointer; border-bottom: 1px solid var(--dh-hairline); }
+.brand.slim { justify-content: center; padding-left: 0; padding-right: 0; }
+.robot-avatar { width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.bname { font-weight: 700; font-size: 15px; letter-spacing: .3px; color: var(--el-text-color-primary); }
 
 /* 客户门户顶栏 */
 .p-header {

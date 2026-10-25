@@ -140,8 +140,8 @@ async function doLogin() {
   color: #fff; font-weight: 800; font-size: 17px; line-height: 44px; text-align: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
-.brand-name { font-weight: 700; font-size: 17px; letter-spacing: .3px; }
-.brand-slogan { color: #b9c8de; font-size: 12px; margin-top: 2px; }
+.brand-name { font-weight: 700; font-size: 28px; letter-spacing: -0.022em; }
+.brand-slogan { color: #a9bdd8; font-size: 13px; margin-top: 6px; letter-spacing: 0.01em; }
 
 .chat-demo { margin: 30px 0 6px; display: flex; flex-direction: column; gap: 12px; }
 .bubble {

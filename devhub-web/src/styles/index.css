@@ -389,3 +389,82 @@ html.dark .el-dropdown-menu__item:not(.is-disabled):focus {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+ * Apple 层 v3 · Editorial 精修（HIG Typography/Materials 增量）
+ *   本层只做增量覆盖：负字距排版 / 表格 Settings 风格 /
+ *   按钮胶囊语言 / 统一 Apple 动效曲线
+ * ============================================================ */
+
+/* ---- 动效曲线统一（Apple spring 近似）---- */
+:root { --dh-ease: cubic-bezier(0.32, 0.72, 0, 1); --dh-duration: 0.22s; }
+
+/* ---- 排版：大字负字距（SF Pro Display 观感，≥18px 收紧）---- */
+h1, h2, h3, .el-drawer__title, .el-dialog__title,
+.st-v, .desk-title, .bname, .p-name {
+  letter-spacing: -0.022em;
+}
+body { line-height: 1.62; }
+.el-drawer__title { font-weight: 600; font-size: 15px; }
+.el-dialog__title { font-weight: 600; }
+
+/* ---- 表格：Apple「设置」风格（透明表头 + 发丝行线 + 宽松行距）---- */
+.el-table {
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--el-text-color-secondary);
+  --el-table-row-hover-bg-color: rgba(0, 113, 227, 0.045);
+  --el-table-border-color: var(--dh-hairline);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--dh-hairline);
+  background: var(--dh-glass-bg);
+  -webkit-backdrop-filter: var(--dh-glass-blur);
+  backdrop-filter: var(--dh-glass-blur);
+}
+.el-table th.el-table__cell {
+  font-weight: 500;
+  font-size: 12px;
+  height: 40px;
+  background: transparent;
+}
+.el-table .el-table__cell { padding: 7px 0; }
+.el-table td.el-table__cell { font-size: 13.5px; }
+html.dark .el-table { background: rgba(30, 30, 34, 0.72); }
+
+/* ---- 按钮：主操作胶囊化（iCloud 风格），按压微缩 ---- */
+.el-button--primary:not(.is-text):not(.is-link) { border-radius: 999px; }
+.el-button--default:not(.is-text):not(.is-link):not(.el-button--small) { border-radius: 10px; }
+.el-button:not(.is-text):not(.is-link):active { transform: scale(0.97); }
+.el-button { transition: transform var(--dh-duration) var(--dh-ease), background var(--dh-duration) var(--dh-ease), box-shadow var(--dh-duration) var(--dh-ease); }
+
+/* ---- 表单控件：统一高度与圆角 ---- */
+.el-input__wrapper, .el-select__wrapper, .el-textarea__inner { border-radius: 10px; }
+.el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px rgba(0,113,227,0.14); }
+.el-textarea__inner:focus { box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px rgba(0,113,227,0.14); }
+
+/* ---- 分页器圆化 ---- */
+.el-pagination.is-background .el-pager li,
+.el-pagination.is-background .btn-prev,
+.el-pagination.is-background .btn-next {
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.el-pagination.is-background .el-pager li.is-active {
+  background: var(--el-color-primary);
+  color: #fff;
+}
+
+/* ---- 空状态：淡蓝圆底衬（呼应品牌）---- */
+.el-empty__image img { display: none; }
+.el-empty__image {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, rgba(0,113,227,0.14), rgba(0,113,227,0.05));
+  border: 1px solid rgba(0,113,227,0.10);
+}
+
+/* ---- 弹层：入出场 Apple 曲线 + 轻微上浮 ---- */
+.el-overlay { transition: opacity 0.24s var(--dh-ease); }
+.el-dialog { transition: transform 0.28s var(--dh-ease), opacity 0.24s var(--dh-ease); border-radius: var(--dh-radius-float); }
+
+/* ---- 看板大数字：Display 级排版 ---- */
+.st-v { font-size: 24px; font-variant-numeric: tabular-nums; }

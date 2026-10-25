@@ -1,6 +1,26 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>HelpHub · AI 智能客服与工单处理系统</title></head>
-<body><div id="app"></div><script type="module" src="/src/main.js"></script></body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="description" content="HelpHub · AI 智能客服与工单处理系统：RAG 知识问答、Agentic 工具自主解决、工单 SLA 闭环与 AI 质检">
+  <meta name="theme-color" content="#0071e3">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23d6e6ff'/%3E%3Ccircle cx='20' cy='20' r='14.5' fill='%230b4fd9'/%3E%3Crect x='12' y='14.2' width='16' height='11.6' rx='4' fill='%23fff'/%3E%3Ccircle cx='16.2' cy='19.6' r='1.9' fill='%230b4fd9'/%3E%3Ccircle cx='23.8' cy='19.6' r='1.9' fill='%230b4fd9'/%3E%3Crect x='16.5' y='22.6' width='7' height='1.7' rx='0.85' fill='%230b4fd9'/%3E%3C/svg%3E">
+  <title>HelpHub · AI 智能客服与工单处理系统</title>
+  <style>
+    /* 首屏占位：JS 挂载前不再是白屏（弱网/冷启动可感知加载状态） */
+    .boot { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; font: 13px/1 -apple-system, "Segoe UI", sans-serif; color: #6a6e78; }
+    .boot-ring { width: 34px; height: 34px; border: 3px solid #dbe6f5; border-top-color: #0071e3; border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    @media (prefers-color-scheme: dark) { .boot { color: #9aa3af; } .boot-ring { border-color: #2a3242; border-top-color: #4f94ea; } }
+    @media (prefers-reduced-motion: reduce) { .boot-ring { animation: none; } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="boot"><div class="boot-ring"></div><div>HelpHub 加载中…</div></div>
+    <noscript style="display:block;padding:40px;text-align:center">本系统需要启用 JavaScript 才能使用。</noscript>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
 </html>

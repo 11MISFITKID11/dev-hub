@@ -42,4 +42,27 @@ router.beforeEach(to => {
   }
 })
 
+// 页面标题（生产对齐）：路由 meta.title → document.title
+const TITLES = {
+  '/login': '登录', '/ai/chat': '智能问答', '/ai/history': '会话记录', '/ai/ops': '知识运营',
+  '/ai/eval': '质检回归', '/ai/feedback': '会话评价', '/dashboard': '客服工作台', '/doc': '知识库',
+  '/report': '运营报表', '/system': '系统管理', '/system/models': '模型配置', '/system/prompts': 'Prompt 模板',
+  '/tickets': '工单中心', '/tickets/qc': '质检统计', '/ticket/mine': '我的工单'
+}
+router.afterEach(to => {
+  document.title = (TITLES[to.path] ? TITLES[to.path] + ' · ' : '') + 'HelpHub 智能客服'
+})
+
+// 懒加载失败兜底：发版后旧 hash chunk 404 会报 Failed to fetch dynamically imported module，
+// 刷新一次即可拿到新资源清单；仅对首次失败生效，防死循环
+let reloadedForChunkError = false
+router.onError((error, to) => {
+  const msg = String(error?.message || error)
+  if (msg.includes('Failed to fetch dynamically imported module') && !reloadedForChunkError && to?.fullPath) {
+    reloadedForChunkError = true
+    location.replace('/#' + to.fullPath)
+    location.reload()
+  }
+})
+
 export default router

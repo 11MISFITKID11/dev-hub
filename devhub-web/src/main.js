@@ -23,4 +23,13 @@ app.directive('perm', {
     if (binding.value && !useUserStore().hasPerm(binding.value)) el.parentNode?.removeChild(el)
   }
 })
+
+// 全局错误兜底：组件渲染/生命周期异常不再白屏，集中 toast + 控制台（生产可在此接 Sentry）
+app.config.errorHandler = (err, instance, info) => {
+  console.error('[全局异常]', info, err)
+  try { ElementPlus.ElMessage.error('页面出错了：' + (err?.message || info).toString().slice(0, 60)) } catch (e) { }
+}
+window.addEventListener('unhandledrejection', e => {
+  console.error('[未捕获 Promise 异常]', e.reason)
+})
 app.mount('#app')

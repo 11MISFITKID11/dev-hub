@@ -115,7 +115,20 @@ import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import hljs from 'highlight.js'
+// highlight 按需注册：全量引入带 190+ 语言约 900kB，客服场景只用到 7 种
+import hljs from 'highlight.js/lib/core'
+import bash from 'highlight.js/lib/languages/bash'
+import java from 'highlight.js/lib/languages/java'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import python from 'highlight.js/lib/languages/python'
+import sql from 'highlight.js/lib/languages/sql'
+import xml from 'highlight.js/lib/languages/xml'
+hljs.registerLanguage('bash', bash); hljs.registerLanguage('shell', bash)
+hljs.registerLanguage('java', java); hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('js', javascript); hljs.registerLanguage('json', json)
+hljs.registerLanguage('python', python); hljs.registerLanguage('sql', sql)
+hljs.registerLanguage('xml', xml); hljs.registerLanguage('html', xml)
 import api from '../../api'
 import { useUserStore } from '../../stores/user'
 

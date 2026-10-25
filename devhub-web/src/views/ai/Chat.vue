@@ -119,7 +119,7 @@ const store = useUserStore()
 // 管理侧才展示模型/温度参数；客户门户保持纯问答界面
 const isAdminSide = computed(() => store.allowedPaths.has('/tickets') || store.allowedPaths.has('/dashboard'))
 const convs = ref([]), cur = ref(null), msgs = ref([])
-const suggestions = ['日志打印有哪些强制规约？', 'HashMap 遍历用 keySet 还是 entrySet？', '为什么禁止使用 Executors 创建线程池？']
+const suggestions = ['退款政策里 7 天无理由怎么算？', '网关一直闪红灯连不上网怎么办？', '设备保修期是多久？怎么申请维修？']
 const input = ref(''), streaming = ref(false), ragOn = ref(true)
 const listEl = ref(), ctrl = ref(null), srcOpen = ref(null)
 const srcDrawer = ref(false)

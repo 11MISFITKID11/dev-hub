@@ -74,7 +74,6 @@
     <el-container>
       <el-header class="dh-topbar" style="display:flex; align-items:center; gap:12px">
         <span style="font-weight:600; font-size:15px; letter-spacing:.2px">{{ currentTitle }}</span>
-        <GlobalSearch />
         <div style="margin-left:auto; display:flex; align-items:center; gap:14px">
           <NotificationBell />
           <el-switch v-model="dark" inline-prompt active-icon="Moon" inactive-icon="Sunny" @change="applyTheme" />
@@ -110,7 +109,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import NotificationBell from '../components/NotificationBell.vue'
 import ProfileDialog from '../components/ProfileDialog.vue'
-import GlobalSearch from '../components/GlobalSearch.vue'
 import { ChatDotRound, Folder, Odometer, DataAnalysis, Setting, Service, Tickets } from '@element-plus/icons-vue'
 
 const store = useUserStore()

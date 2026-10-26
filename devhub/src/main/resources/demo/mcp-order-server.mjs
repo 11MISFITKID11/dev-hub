@@ -31,7 +31,7 @@ const REFUND_POLICY = {
 const TOOLS = [
   {
     name: 'query_order',
-    description: '按订单号查询订单状态、金额、商品与物流信息（演示数据源）',
+    description: '外部订单系统查询（MCP 远程）。凡用户给出具体订单号询问订单状态/物流/金额/商品时【必须】调用本工具获取真实数据，禁止凭记忆或猜测回答订单状态。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -42,7 +42,7 @@ const TOOLS = [
   },
   {
     name: 'get_refund_policy',
-    description: '查询退款/售后政策条款（按订单类型）',
+    description: '外部售后系统（MCP 远程）：查询指定订单类型的退款/售后政策条款',
     inputSchema: {
       type: 'object',
       properties: {

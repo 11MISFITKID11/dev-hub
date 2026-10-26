@@ -23,6 +23,14 @@ public class McpProperties {
     /** 总开关：false 时完全不建立连接（默认） */
     private boolean enabled = false;
 
+    /**
+     * 同域工具治理：MCP server 已提供等价能力时，不再向模型推广的本地工具名。
+     * 本地工具仍可执行（显式点名不拦），只是从工具列表中隐藏——
+     * 避免模型在本地 mock 与 MCP 远程之间随机选择（实测 glm-4-flash 会优先本地并在
+     * "未找到"后停止重试，导致 MCP 数据源永远不被触达）。
+     */
+    private List<String> replacesLocalTools = new ArrayList<>();
+
     /** 外部 MCP server 列表 */
     private List<Server> servers = new ArrayList<>();
 

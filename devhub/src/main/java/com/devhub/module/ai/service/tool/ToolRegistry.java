@@ -127,6 +127,8 @@ public class ToolRegistry {
      */
     public List<ToolSpecification> buildToolSpecifications(List<String> toolNames) {
         List<ToolSpecification> specs = getTools(toolNames).stream()
+                // 同域治理：被 MCP 等价工具替代的本地工具不再向模型推广（显式路由仍可用）
+                .filter(tool -> !mcpToolService.replacesLocal(tool.getName()))
                 .map(tool -> ToolSpecification.builder()
                         .name(tool.getName())
                         .description(tool.getDescription())
@@ -136,12 +138,8 @@ public class ToolRegistry {
         if (toolNames == null || toolNames.isEmpty()) {
             specs.addAll(mcpToolService.listToolSpecifications());
         } else {
-            // 白名单模式：显式点名的 MCP 工具放行
-            for (ToolSpecification mcpSpec : mcpToolService.listToolSpecifications()) {
-                if (toolNames.contains(mcpSpec.name())) {
-                    specs.add(mcpSpec);
-                }
-            }
+            // 白名单模式：显式点名的 MCP 工具放行；白名单内被 MCP 替代的本地工具自动映射其 MCP 版
+            specs.addAll(mcpToolService.listToolSpecificationsForWhitelist(toolNames));
         }
         return specs;
     }

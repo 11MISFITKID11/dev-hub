@@ -37,13 +37,30 @@ agent:
 
 ## 演示
 
-`devhub/src/main/resources/demo/mcp-order-server.mjs` 是零依赖 node 实现的 MCP server（订单查询 + 退款政策），
-`AGENT_MCP_ENABLED=true` 启动后端后，在智能问答中问"订单 SO-2024-1001 发货了吗"即可看到 agent 调用
-`mcp_demo-order_query_order`。
+**一键演示**：`bash devhub/start-demo.sh`（起中间件 → 清语义缓存 → 后端 MCP 开启 → 前端），然后访问 http://localhost:5173（admin/admin123）问：
+
+> 我的订单 SO-2024-1001 发货了吗？什么时候能到？
+
+实测链路（DeepSeek 主模型）：意图路由命中事务信号 → ReAct → 调用 `mcp_demo-order_query_order`（5ms）→ 回答含 MCP 真实数据（机械键盘/¥299/顺丰 SF1234567890/预计 2026-10-27 送达）：
+
+![MCP 订单查询演示](assets/mcp-order-query-demo.png)
+
+日志佐证：`ToolRouter 路由工具调用: tool=mcp_demo-order_query_order` + `MCP 工具执行: server=demo-order, elapsed=5ms`。
+评测页（质检回归）跑一轮可见 MRR/NDCG 列（实测批次：命中率 100%，MRR=1，NDCG=1）：
+
+![评测 MRR/NDCG](assets/eval-mrr-ndcg.png)
+
+## 联调中踩的三个坑（治理设计由此而来）
+
+1. **同域工具冲突**：本地 `query_order`（mock 数据）与 MCP 订单工具同时可见时，模型优先本地且在"未找到"后停止重试 → 引入 `replaces-local-tools` 配置：被 MCP 替代的本地工具不再向模型推广（显式调用仍可执行）。
+2. **编排层工具白名单不感知 MCP**：agentic 分支白名单 `AGENT_TOOLS=[query_order, create_ticket]` 不含 MCP 工具，叠加治理隐藏后模型只剩建工单工具 → `listToolSpecificationsForWhitelist`：白名单内被替代的本地工具自动映射其 MCP 同名工具，调用方零改动。
+3. **语义缓存实体穿透**：仅订单号不同的两问向量相似度 0.965，语义缓存错误回放旧答案 → `SemanticAnswerCache` 加实体守卫（数字实体集合不同则绕过）。
+
+另：工具描述里的"（演示数据源）"字样会让模型拒绝用它查"真实"订单——MCP 工具描述应写明适用条件与强制性，这是工具描述工程的一部分。
 
 ## 测试
 
-- `McpToolServiceTest` / `ToolRouterMcpTest`：命名规范、禁用态、前缀分流（无需 node）
+- `McpToolServiceTest` / `ToolRouterMcpTest` / `SemanticAnswerCacheEntityTest`：命名规范、禁用态、前缀分流、缓存实体守卫（无需 node）
 - `McpDemoServerIT`（`DEVHUB_IT=local` 门控）：真连 node 子进程，覆盖 initialize / tools/list / tools/call / isError 语义
 
 ## 设计取舍

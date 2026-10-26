@@ -133,6 +133,8 @@ agent:
   # 演示 server 为 demo/mcp-order-server.mjs（node 零依赖实现），生产可换成官方 filesystem/mysql/jira 等 MCP server
   mcp:
     enabled: ${AGENT_MCP_ENABLED:false}
+    # 同域工具治理：MCP 订单 server 已提供等价查询，本地 mock 版 query_order 不再向模型推广
+    replaces-local-tools: [query_order]
     servers:
       - key: demo-order
         transport: stdio

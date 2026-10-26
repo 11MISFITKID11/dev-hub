@@ -139,32 +139,70 @@ public class McpToolService {
         }
         List<ToolSpecification> result = new ArrayList<>();
         for (Map.Entry<String, McpToolRef> entry : toolIndex.entrySet()) {
-            McpToolRef ref = entry.getValue();
-            McpClient client = clients.get(ref.server());
-            if (client == null) {
-                continue;
-            }
-            try {
-                for (ToolSpecification spec : client.listTools()) {
-                    if (spec.name().equals(ref.originalName())) {
-                        result.add(ToolSpecification.builder()
-                                .name(entry.getKey())
-                                .description(spec.description())
-                                .parameters(spec.parameters())
-                                .metadata(spec.metadata())
-                                .build());
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("MCP server [{}] 工具列表刷新失败: {}", ref.server(), e.getMessage());
+            ToolSpecification spec = buildSpec(entry.getKey(), entry.getValue());
+            if (spec != null) {
+                result.add(spec);
             }
         }
         return result;
     }
 
+    /**
+     * 白名单解析：白名单点名的本地工具被 MCP 替代时（replaces-local-tools），
+     * 其 MCP 侧同名工具自动补入——编排层白名单（如 AGENT_TOOLS=query_order,create_ticket）
+     * 无需感知 MCP 存在，治理切换对调用方透明。
+     */
+    public List<ToolSpecification> listToolSpecificationsForWhitelist(List<String> toolNames) {
+        if (!properties.isEnabled() || toolNames == null || toolNames.isEmpty()) {
+            return List.of();
+        }
+        List<ToolSpecification> result = new ArrayList<>();
+        for (Map.Entry<String, McpToolRef> entry : toolIndex.entrySet()) {
+            boolean named = toolNames.contains(entry.getKey());                       // 显式点名暴露名
+            boolean replaces = toolNames.contains(entry.getValue().originalName())   // 白名单本地工具被替代
+                    && replacesLocal(entry.getValue().originalName());
+            if (named || replaces) {
+                ToolSpecification spec = buildSpec(entry.getKey(), entry.getValue());
+                if (spec != null) {
+                    result.add(spec);
+                }
+            }
+        }
+        return result;
+    }
+
+    private ToolSpecification buildSpec(String exposedName, McpToolRef ref) {
+        McpClient client = clients.get(ref.server());
+        if (client == null) {
+            return null;
+        }
+        try {
+            for (ToolSpecification spec : client.listTools()) {
+                if (spec.name().equals(ref.originalName())) {
+                    return ToolSpecification.builder()
+                            .name(exposedName)
+                            .description(spec.description())
+                            .parameters(spec.parameters())
+                            .metadata(spec.metadata())
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("MCP server [{}] 工具列表刷新失败: {}", ref.server(), e.getMessage());
+        }
+        return null;
+    }
+
     public boolean hasTool(String exposedName) {
         return toolIndex.containsKey(exposedName);
+    }
+
+    /**
+     * 同域工具治理：该本地工具是否已被 MCP 等价工具替代（不再向模型推广，但显式调用仍执行）。
+     */
+    public boolean replacesLocal(String localToolName) {
+        return properties.isEnabled() && properties.getReplacesLocalTools() != null
+                && properties.getReplacesLocalTools().contains(localToolName);
     }
 
     /**

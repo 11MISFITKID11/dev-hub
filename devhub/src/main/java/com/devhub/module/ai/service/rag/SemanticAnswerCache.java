@@ -64,6 +64,13 @@ public class SemanticAnswerCache {
                 }
             }
             if (best != null && bestSim >= SIMILARITY_THRESHOLD) {
+                // 实体守卫：订单号等数字实体不同的两问，向量相似度会虚高（实测仅单号之差 sim=0.965），
+                // 不能视为等价问题——实体集合不一致时绕过缓存走真实链路
+                if (!sameEntities(question, best.question())) {
+                    log.info("语义缓存相似({})但实体不同，绕过: now={}, cached={}",
+                            String.format("%.3f", bestSim), question, best.question());
+                    return null;
+                }
                 log.info("语义答案缓存命中: question={}, sim={}, 原问题={}",
                         question, String.format("%.3f", bestSim), best.question());
                 return best;
@@ -111,6 +118,27 @@ public class SemanticAnswerCache {
         } catch (java.security.NoSuchAlgorithmException e) {
             return EXACT_KEY_PREFIX + normalized.hashCode();
         }
+    }
+
+    /** 数字实体（订单号/手机号/金额等含数字片段），用于语义缓存的等价性守卫 */
+    private static final java.util.regex.Pattern ENTITY =
+            java.util.regex.Pattern.compile("[A-Za-z]*-?\\d+(?:-\\d+)*");
+
+    /**
+     * 两问题的数字实体集合是否一致。双方均无实体（纯常识问答）视为一致，可走缓存；
+     * 任一方含实体且集合不同（如 SO-2024-1001 vs SO-2024-1004）视为不同问题。
+     */
+    static boolean sameEntities(String q1, String q2) {
+        java.util.Set<String> e1 = entities(q1), e2 = entities(q2);
+        return e1.isEmpty() && e2.isEmpty() || e1.equals(e2);
+    }
+
+    private static java.util.Set<String> entities(String q) {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        if (q == null) return set;
+        java.util.regex.Matcher m = ENTITY.matcher(q);
+        while (m.find()) set.add(m.group());
+        return set;
     }
 
     private double cosine(List<Float> a, List<Float> b) {

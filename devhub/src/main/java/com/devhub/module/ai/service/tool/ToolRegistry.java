@@ -22,6 +22,10 @@ import java.util.stream.Collectors;
  * 管理所有可用工具的注册、查询、生命周期。
  * 启动时自动扫描所有 {@link BaseTool} 实现并注册，
  * 同时支持运行时动态注册/注销。
+ * <p>
+ * MCP 远程工具（agent.mcp 配置的外部 server）不经过本表注册，
+ * 由 {@link McpToolService} 独立管理并在 {@link #buildToolSpecifications} 中
+ * 与本地工具合并——对模型呈现统一工具列表。
  */
 @Slf4j
 @Component
@@ -35,6 +39,8 @@ public class ToolRegistry {
     private final List<BaseTool> autoDiscoveredTools;
 
     private final ObjectMapper objectMapper;
+
+    private final com.devhub.module.ai.service.tool.mcp.McpToolService mcpToolService;
 
     @PostConstruct
     public void init() {
@@ -117,15 +123,27 @@ public class ToolRegistry {
      * <p>
      * 把每个工具声明的 JSON Schema 转换为 JsonObjectSchema，
      * 模型将直接生成工具原生参数（如 {"expression": "1+2"}）。
+     * MCP 远程工具一并提供（toolNames 为 null 即全量时；白名单模式下按暴露名精确匹配）。
      */
     public List<ToolSpecification> buildToolSpecifications(List<String> toolNames) {
-        return getTools(toolNames).stream()
+        List<ToolSpecification> specs = getTools(toolNames).stream()
                 .map(tool -> ToolSpecification.builder()
                         .name(tool.getName())
                         .description(tool.getDescription())
                         .parameters(parseSchema(tool.getParameterSchema(), tool.getName()))
                         .build())
                 .collect(Collectors.toList());
+        if (toolNames == null || toolNames.isEmpty()) {
+            specs.addAll(mcpToolService.listToolSpecifications());
+        } else {
+            // 白名单模式：显式点名的 MCP 工具放行
+            for (ToolSpecification mcpSpec : mcpToolService.listToolSpecifications()) {
+                if (toolNames.contains(mcpSpec.name())) {
+                    specs.add(mcpSpec);
+                }
+            }
+        }
+        return specs;
     }
 
     /**
@@ -174,9 +192,9 @@ public class ToolRegistry {
     }
 
     /**
-     * 判断工具是否已注册
+     * 判断工具是否已注册（含 MCP 远程工具）
      */
     public boolean contains(String toolName) {
-        return registry.containsKey(toolName);
+        return registry.containsKey(toolName) || mcpToolService.hasTool(toolName);
     }
 }

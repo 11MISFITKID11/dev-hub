@@ -129,6 +129,17 @@ agent:
     success-threshold: 3
     timeout-seconds: 30
 
+  # MCP 客户端（Model Context Protocol）：外部 server 工具并入 ToolRegistry（暴露名 mcp_<server>_<tool>）
+  # 演示 server 为 demo/mcp-order-server.mjs（node 零依赖实现），生产可换成官方 filesystem/mysql/jira 等 MCP server
+  mcp:
+    enabled: ${AGENT_MCP_ENABLED:false}
+    servers:
+      - key: demo-order
+        transport: stdio
+        command: [node, D:/kaifa/javaproject/project-devhub/devhub/src/main/resources/demo/mcp-order-server.mjs]
+        init-timeout-seconds: 20
+        tool-timeout-seconds: 30
+
   # 多模型路由配置（LangChain4j，OpenAI 兼容协议）
   llm:
     # 高并发保护：LLM 调用全局并发上限与排队超时（超时返回"稍后再试"而非打爆供应商配额）

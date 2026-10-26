@@ -14,6 +14,9 @@ import java.util.Map;
  * <p>
  * 负责解析 LLM 返回的工具调用指令，路由到对应的工具执行。
  * 将 LLM 输出的 JSON 格式工具调用转化为实际的工具执行。
+ * <p>
+ * MCP 远程工具（暴露名前缀 mcp_）转发给对应外部 server，
+ * 结果与本地工具同样包装为 ToolResult（审计/耗时语义一致）。
  */
 @Slf4j
 @Component
@@ -22,6 +25,7 @@ public class ToolRouter {
 
     private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper;
+    private final com.devhub.module.ai.service.tool.mcp.McpToolService mcpToolService;
 
     /**
      * 路由并执行工具调用
@@ -32,6 +36,12 @@ public class ToolRouter {
      */
     public BaseTool.ToolResult route(String toolName, String argsJson) {
         log.info("路由工具调用: tool={}, args={}", toolName, argsJson);
+
+        // MCP 远程工具：转发外部 server 执行
+        if (toolName != null && toolName.startsWith(
+                com.devhub.module.ai.service.tool.mcp.McpToolService.EXPOSED_PREFIX)) {
+            return mcpToolService.execute(toolName, argsJson);
+        }
 
         return toolRegistry.getTool(toolName)
                 .map(tool -> {

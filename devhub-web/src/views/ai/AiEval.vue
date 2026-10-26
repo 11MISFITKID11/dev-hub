@@ -45,6 +45,8 @@
         <el-table-column label="命中率" width="100"><template #default="{ row }">{{ row.hitCount }}/{{ row.total }}（{{ pct(row.hitCount, row.total) }}）</template></el-table-column>
         <el-table-column label="门控通过" width="100"><template #default="{ row }">{{ row.gatePass }}/{{ row.total }}（{{ pct(row.gatePass, row.total) }}）</template></el-table-column>
         <el-table-column prop="avgTop1" label="平均top1" width="80" />
+        <el-table-column label="MRR" width="70"><template #default="{ row }">{{ row.avgMrr ?? '-' }}</template></el-table-column>
+        <el-table-column label="NDCG" width="70"><template #default="{ row }">{{ row.avgNdcg ?? '-' }}</template></el-table-column>
         <el-table-column label="忠实度" width="80"><template #default="{ row }">{{ row.avgFaith ?? '-' }}</template></el-table-column>
         <el-table-column prop="costMs" label="耗时" width="90"><template #default="{ row }">{{ (row.costMs / 1000).toFixed(1) }}s</template></el-table-column>
         <el-table-column prop="createdBy" label="执行人" width="90" />
@@ -60,6 +62,7 @@
           </template></el-table-column>
           <el-table-column prop="question" label="问题" min-width="180" show-overflow-tooltip />
           <el-table-column prop="top1Score" label="top1" width="70" />
+          <el-table-column prop="mrr" label="MRR" width="64"><template #default="{ row }">{{ row.mrr ?? '-' }}</template></el-table-column>
           <el-table-column prop="faithScore" label="忠实度" width="70"><template #default="{ row }">{{ row.faithScore ?? '-' }}</template></el-table-column>
           <el-table-column prop="topDocs" label="重排 Top5 文档" min-width="240" show-overflow-tooltip />
         </el-table>

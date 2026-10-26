@@ -61,7 +61,8 @@ public class EvalService {
         }
 
         int hitCount = 0, gatePass = 0, faithCount = 0;
-        double top1Sum = 0, faithSum = 0;
+        double top1Sum = 0, faithSum = 0, mrrSum = 0, ndcgSum = 0;
+        int rankCount = 0;
         List<EvalResult> results = new ArrayList<>();
 
         for (EvalCase c : cases) {
@@ -73,6 +74,7 @@ public class EvalService {
             if (r.getGatePass() != null && r.getGatePass() == 1) gatePass++;
             if (r.getTop1Score() != null) top1Sum += r.getTop1Score();
             if (r.getFaithScore() != null) { faithSum += r.getFaithScore(); faithCount++; }
+            if (r.getMrr() != null) { mrrSum += r.getMrr(); ndcgSum += r.getNdcg(); rankCount++; }
         }
 
         EvalRun run = EvalRun.builder()
@@ -81,6 +83,8 @@ public class EvalService {
                 .hitCount(hitCount)
                 .gatePass(gatePass)
                 .avgTop1(results.isEmpty() ? 0 : Math.round(top1Sum / results.size() * 1000) / 1000.0)
+                .avgMrr(rankCount == 0 ? null : Math.round(mrrSum / rankCount * 1000) / 1000.0)
+                .avgNdcg(rankCount == 0 ? null : Math.round(ndcgSum / rankCount * 1000) / 1000.0)
                 .avgFaith(faithCount == 0 ? null : Math.round(faithSum / faithCount * 100) / 100.0)
                 .costMs(System.currentTimeMillis() - start)
                 .createdBy(currentUser())
@@ -131,6 +135,11 @@ public class EvalService {
             r.setGatePass(sources.isEmpty() ? 0 : 1);
             r.setTopDocs(joinDocs(sources.stream()
                     .map(s -> s.getFileName() == null ? "" : s.getFileName()).toList()));
+            List<String> sourceNames = sources.stream()
+                    .map(s -> s.getFileName() == null ? "" : s.getFileName()).toList();
+            int rank = EvalMetrics.firstHitRank(c.getExpectDocName(), sourceNames);
+            r.setMrr(EvalMetrics.round3(EvalMetrics.mrr(rank)));
+            r.setNdcg(EvalMetrics.round3(EvalMetrics.ndcg(rank)));
             r.setTop1Score(sources.isEmpty() ? null
                     : Math.round(sources.get(0).getScore() * 1000) / 1000.0);
             r.setFaithScore(resp.getFaithfulness());
@@ -165,6 +174,9 @@ public class EvalService {
         r.setGatePass(reranked.isEmpty() ? 0 : (reranked.get(0).getScore() >= gateThreshold ? 1 : 0));
         r.setTop1Score(reranked.isEmpty() ? null
                 : Math.round(reranked.get(0).getScore() * 1000) / 1000.0);
+        int rank = EvalMetrics.firstHitRank(c.getExpectDocName(), names);
+        r.setMrr(EvalMetrics.round3(EvalMetrics.mrr(rank)));
+        r.setNdcg(EvalMetrics.round3(EvalMetrics.ndcg(rank)));
         r.setTopDocs(joinDocs(names));
     }
 

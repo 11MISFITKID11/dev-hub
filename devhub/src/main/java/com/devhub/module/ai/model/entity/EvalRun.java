@@ -20,6 +20,10 @@ public class EvalRun {
     Integer hitCount;
     Integer gatePass;
     Double avgTop1;
+    /** 平均MRR（仅统计设置了期望文档的用例） */
+    Double avgMrr;
+    /** 平均NDCG@k */
+    Double avgNdcg;
     Double avgFaith;
     Long costMs;
     String createdBy;

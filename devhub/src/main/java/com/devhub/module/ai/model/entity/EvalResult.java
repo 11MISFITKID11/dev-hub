@@ -20,6 +20,10 @@ public class EvalResult {
     Integer hit;
     Integer gatePass;
     Double top1Score;
+    /** MRR：首个命中文档排名倒数（未命中=0，未设期望=NULL） */
+    Double mrr;
+    /** NDCG@k：二值相关度折损累计增益（rank1=1.0，未设期望=NULL） */
+    Double ndcg;
     String topDocs;
     Double faithScore;
     String answerExcerpt;

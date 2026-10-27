@@ -51,6 +51,20 @@ class McpToolServiceTest {
         assertFalse(service.status().enabled());
     }
 
+    @Test
+    void 同域治理_仅MCP启用时本地工具被替代推广() {
+        McpProperties props = new McpProperties();
+        props.setEnabled(true);
+        props.setReplacesLocalTools(java.util.List.of("query_order"));
+        McpToolService service = new McpToolService(props);
+
+        assertTrue(service.replacesLocal("query_order"));
+        assertFalse(service.replacesLocal("search"));       // 未列名的本地工具不受影响
+
+        props.setEnabled(false);
+        assertFalse(service.replacesLocal("query_order"));  // MCP 未启用时本地工具恢复推广
+    }
+
     private String sanitize(String key) {
         return McpToolService.sanitizeKey(key);
     }

@@ -11,9 +11,9 @@ REM ============================================
 
 set "JAVA_HOME=D:\java21"
 set "MVN_CMD=D:\springboot\Maven\apache-maven-3.9.11\bin\mvn.cmd"
-set "PATH=D:\DockerDesktop\resources/bin;%JAVA_HOME%\bin;D:\springboot\Maven\apache-maven-3.9.11\bin;%PATH%"
+set "PATH=D:\DockerDesktop\resources\bin;%JAVA_HOME%\bin;D:\springboot\Maven\apache-maven-3.9.11\bin;%PATH%"
 
-echo [1/4] 启动中间件容器...
+echo [1/5] 启动中间件容器...
 docker compose -f D:\docker\middleware\docker-compose.yml up -d mysql redis milvus etcd minio
 if errorlevel 1 (
     echo 中间件启动失败，请确认 Docker Desktop 正在运行
@@ -21,10 +21,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [2/4] 停掉占用 8080 的应用容器...
+echo [2/5] 清理 8080 占用（应用容器与残留 java 进程）...
 docker stop devhub-app 2>nul
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8080" ^| findstr "LISTENING"') do (
+    echo   结束占用进程 PID %%p
+    taskkill /F /PID %%p >nul 2>&1
+)
 
-echo [3/4] 读取 API Key 并构建后端...
+echo [3/5] 读取 API Key 并构建后端...
 set "OPENAI_API_KEY="
 set "DEEPSEEK_API_KEY="
 set "LLM_PRIMARY="
@@ -50,7 +54,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [4/4] 启动后端与前端（各开一个日志窗口）...
+echo [4/5] 等待 Milvus 就绪（容器刚启动时代理需 1-2 分钟，未就绪时后端会启动失败）...
+set /a MILVUS_TRIES=0
+:wait_milvus
+powershell -NoProfile -Command "try{$c=New-Object Net.Sockets.TcpClient('localhost',19530);$c.Close();exit 0}catch{exit 1}" >nul 2>&1
+if not errorlevel 1 goto milvus_ok
+set /a MILVUS_TRIES+=1
+if !MILVUS_TRIES! GEQ 40 (
+    echo   [警告] Milvus 120 秒未就绪，仍继续启动后端（若失败请稍后重跑本脚本）
+    goto milvus_done
+)
+ping -n 4 127.0.0.1 >nul
+goto wait_milvus
+:milvus_ok
+echo   Milvus 已就绪
+:milvus_done
+
+echo [5/5] 启动后端与前端（各开一个日志窗口）...
 
 set "BKEY=!OPENAI_API_KEY!"
 
@@ -64,13 +84,28 @@ start "DevHub-Backend-8080" cmd /k "cd /d D:\kaifa\javaproject\project-devhub\de
 
 start "DevHub-Frontend-5173" cmd /k "cd /d D:\kaifa\javaproject\project-devhub\devhub-web && if not exist node_modules npm install --no-fund --no-audit && npm run dev"
 
+echo   等待后端健康检查（最多 90 秒）...
+set /a BE_TRIES=0
+:wait_backend
+ping -n 4 127.0.0.1 >nul
+powershell -NoProfile -Command "try{(Invoke-WebRequest -UseBasicParsing http://localhost:8080/actuator/health -TimeoutSec 2).StatusCode;exit 0}catch{exit 1}" >nul 2>&1
+if not errorlevel 1 goto backend_ok
+set /a BE_TRIES+=1
+if !BE_TRIES! GEQ 30 (
+    echo   [警告] 后端 90 秒未就绪：请查看 DevHub-Backend-8080 窗口的报错，处理后重跑本脚本
+    goto backend_done
+)
+goto wait_backend
+:backend_ok
+echo   后端已就绪
+:backend_done
+
 echo.
 echo ============================================
-echo   启动中：等约 30 秒
 echo   前端入口:  http://localhost:5173
 echo   后端健康:  http://localhost:8080/actuator/health
 echo   登录账号:  admin / admin123
 echo   停止方式:  关闭弹出的两个日志窗口
 echo ============================================
 echo 本窗口 10 秒后自动关闭
-timeout /t 10 >nul
+ping -n 11 127.0.0.1 >nul

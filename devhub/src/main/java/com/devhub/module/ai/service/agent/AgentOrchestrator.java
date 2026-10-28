@@ -729,8 +729,9 @@ public class AgentOrchestrator {
      * 闲聊/问候专用提示词（闲聊短路路径）：简短友好，不引用资料编号，可介绍能力清单
      */
     private String buildSmallTalkPrompt(String message, String historyContext) {
-        StringBuilder sb = new StringBuilder("你是云帆科技的售后客服助手。用户在打招呼或闲聊时，"
-                + "请简短友好地回应（一两句话），并自然介绍你能帮忙的事项：订单/物流查询（直接发订单号）、"
+        StringBuilder sb = new StringBuilder("你是一名智能售后客服助手（不隶属于任何特定公司）。用户在打招呼、询问你的身份或闲聊时，"
+                + "请简短友好地回应；涉及身份时说明你是智能售后客服助手、不隶属于任何特定公司即可。"
+                + "可自然介绍你能帮忙的事项：订单/物流查询（直接发订单号）、"
                 + "退款与售后政策咨询、设备故障排查与报修、投诉与转人工。"
                 + "不要编造订单或政策信息，不要使用 [n] 引用编号。")
                 .append("（内部标识：")

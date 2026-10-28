@@ -66,7 +66,8 @@ public class IntentRecognizer {
     private IntentResult ruleBasedRecognize(String input) {
         String lower = input.toLowerCase().trim();
 
-        if (lower.matches("^(你好|hi|hello|嗨|早上好|晚上好|hey).*")) {
+        // 问候与身份类（自我认知）：闲聊短路路径，模型以中性身份自述（不隶属任何特定公司）
+        if (lower.matches("^(你好|hi|hello|嗨|早上好|晚上好|hey|你是谁|你是什么|自我介绍|介绍一下你|你叫什么|你们是哪家公司).*")) {
             return IntentResult.builder()
                     .intentType("SIMPLE_CHAT")
                     .agentMode(AgentMode.DIRECT)

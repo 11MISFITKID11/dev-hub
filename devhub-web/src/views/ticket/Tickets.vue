@@ -85,8 +85,9 @@
     <div class="pager"><el-pagination background layout="total, prev, pager, next" :total="total"
       :page-size="q.size" :current-page="q.page" @current-change="p => { q.page = p; load() }" /></div>
 
-    <!-- 处理抽屉 -->
-    <el-drawer v-model="drawer" size="46%" :title="cur && cur.ticket.ticketNo + ' · ' + cur.ticket.title">
+    <!-- 处理弹窗（居中） -->
+    <el-dialog v-model="drawer" width="880px" top="5vh" class="tk-dialog"
+               :title="cur && cur.ticket.ticketNo + ' · ' + cur.ticket.title" append-to-body>
       <template v-if="cur">
         <el-descriptions :column="2" size="small" border style="margin-bottom:12px">
           <el-descriptions-item label="发起人">{{ cur.ticket.username }}</el-descriptions-item>
@@ -165,7 +166,7 @@
           </div>
         </div>
       </template>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
@@ -317,4 +318,9 @@ onMounted(() => { load(); loadStats() })
 .blk { margin-bottom: 14px; }
 .blk-t { font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); margin-bottom: 6px; }
 .blk-b { font-size: 13px; line-height: 1.7; white-space: pre-wrap; background: var(--el-fill-color-light); border-radius: 8px; padding: 10px 12px; }
+</style>
+
+<style>
+/* 处理弹窗：限高滚动（append-to-body 后脱离 scoped 作用域，需全局声明） */
+.tk-dialog .el-dialog__body { max-height: 74vh; overflow-y: auto; padding-top: 10px; }
 </style>

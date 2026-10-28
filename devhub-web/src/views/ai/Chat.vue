@@ -62,6 +62,9 @@
           <div :class="m.role === 'USER' ? 'b-user' : 'b-ai'">
             <div v-if="m.role === 'USER'" style="white-space:pre-wrap">{{ m.content }}</div>
             <template v-else>
+              <div v-if="streaming && m.stage && !m.content" class="stage-line">
+                <span class="stage-dot"></span>{{ m.stage }}
+              </div>
               <div v-if="m.agentTools && m.agentTools.length" class="agent-chips">
                 <span v-for="t in m.agentTools" :key="t" class="agent-chip">🔧 {{ TOOL_LBL[t] || t }}</span>
               </div>
@@ -241,7 +244,7 @@ async function send() {
   if (!q || streaming.value) return
   input.value = ''
   msgs.value.push({ role: 'USER', content: q })
-  const aiMsg = { role: 'ASSISTANT', content: '', html: '', sources: [], question: q }
+  const aiMsg = { role: 'ASSISTANT', content: '', html: '', sources: [], question: q, stage: '' }
   msgs.value.push(aiMsg)
   streaming.value = true; ctrl.value = new AbortController()
   scrollBottom()
@@ -276,6 +279,7 @@ async function send() {
         if (data === '[DONE]') continue
         if (data.startsWith('__META__')) {
           const meta = JSON.parse(data.slice(8))
+          if (meta.stage) { aiMsg.stage = meta.text || ''; scrollBottom(); continue }
           if (meta.conversationId && !cur.value) {
             cur.value = { id: meta.conversationId, title: q }
             loadConvs()
@@ -286,6 +290,7 @@ async function send() {
           aiMsg.refused = !!meta.refused
         } else {
           raw += data
+          if (aiMsg.stage) aiMsg.stage = ''
           if (!renderTick) {
             renderTick = setTimeout(() => {
               renderTick = 0
@@ -422,4 +427,8 @@ html.dark .b-ai { background: rgba(36, 36, 40, 0.66); }
 .conv-item .conv-title {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* 阶段进度状态行（流式感知优化）：呼吸点 + 灰字 */
+.stage-line { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--el-text-color-secondary); padding:2px 0; }
+.stage-dot { width:7px; height:7px; border-radius:50%; background:var(--el-color-primary); animation:stagePulse 1.1s ease-in-out infinite; }
+@keyframes stagePulse { 0%,100% { opacity:.25; transform:scale(.8); } 50% { opacity:1; transform:scale(1.15); } }
 </style>

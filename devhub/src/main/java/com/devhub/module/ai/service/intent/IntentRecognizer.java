@@ -53,6 +53,14 @@ public class IntentRecognizer {
     }
 
     /**
+     * 仅规则识别（零 LLM 成本）：流式路径的闲聊短路判定用。
+     * 返回 null 表示规则未命中（调用方不应由此走 LLM 兜底）
+     */
+    public IntentResult recognizeByRule(String userInput) {
+        return ruleBasedRecognize(userInput);
+    }
+
+    /**
      * 基于规则的快速意图判断
      */
     private IntentResult ruleBasedRecognize(String input) {

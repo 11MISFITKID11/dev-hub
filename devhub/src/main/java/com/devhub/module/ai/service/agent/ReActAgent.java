@@ -72,6 +72,15 @@ public class ReActAgent {
      */
     public ReActResult execute(String query, String context, List<String> availableTools,
                                String traceId, String forceModel) {
+        return execute(query, context, availableTools, traceId, forceModel, null);
+    }
+
+    /**
+     * 带工具进度回调的执行：每次发起工具调用前通知（流式路径用来推阶段进度帧）
+     */
+    public ReActResult execute(String query, String context, List<String> availableTools,
+                               String traceId, String forceModel,
+                               java.util.function.Consumer<String> onToolStart) {
         log.info("ReAct Agent 开始执行(原生工具调用): query={}", query);
 
         List<ToolSpecification> tools = toolRegistry.buildToolSpecifications(availableTools);
@@ -105,6 +114,9 @@ public class ReActAgent {
             // 记录模型的消息（含工具调用请求），再逐个执行工具并回填结果
             messages.add(ai);
             for (ToolExecutionRequest request : ai.toolExecutionRequests()) {
+                if (onToolStart != null) {
+                    try { onToolStart.accept(request.name()); } catch (Exception ignored) { }
+                }
                 BaseTool.ToolResult result = executeTool(request);
                 usedTools.add(request.name());
 

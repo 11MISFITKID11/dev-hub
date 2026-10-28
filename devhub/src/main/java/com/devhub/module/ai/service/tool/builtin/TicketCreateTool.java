@@ -58,10 +58,13 @@ public class TicketCreateTool extends BaseTool {
     @Override
     protected String doExecute(Map<String, Object> parameters) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        // 会话上下文由编排层经 ThreadLocal 透传（流式路径工具线程无 SecurityContext），
+        // 建单联动会话进入"待接管"，客户侧横幅即时切换
+        String conversationId = com.devhub.module.ai.service.tool.ConversationContextHolder.get();
         SupportTicket t = ticketService.create(username,
                 String.valueOf(parameters.get("title")).strip(),
                 String.valueOf(parameters.get("content")).strip(),
-                "ai_agent", null, null);
+                "ai_agent", conversationId, null);
         return "工单已创建：" + t.getTicketNo() + "（分类 " + t.getCategory() + " / 优先级 " + t.getPriority()
                 + (t.getHandler() != null ? "，已派发给坐席 " + t.getHandler() : "") + "）。请向客户确认工单号。";
     }

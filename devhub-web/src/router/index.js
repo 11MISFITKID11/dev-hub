@@ -19,6 +19,7 @@ const routes = [
       { path: 'ai/feedback', component: () => import('../views/ai/Feedback.vue') },
       { path: 'tickets', component: () => import('../views/ticket/Tickets.vue') },
       { path: 'tickets/qc', component: () => import('../views/ticket/QcStats.vue') },
+      { path: 'tickets/live', component: () => import('../views/ticket/LiveChat.vue') },
       { path: 'ticket/mine', component: () => import('../views/ticket/MyTickets.vue') },
       { path: 'system/models', component: () => import('../views/system/ModelConfig.vue') },
       { path: 'system/prompts', component: () => import('../views/system/PromptTemplates.vue') }
@@ -47,7 +48,7 @@ const TITLES = {
   '/login': '登录', '/ai/chat': '智能问答', '/ai/history': '会话记录', '/ai/ops': '知识运营',
   '/ai/eval': '质检回归', '/ai/feedback': '会话评价', '/dashboard': '客服工作台', '/doc': '知识库',
   '/report': '运营报表', '/system': '系统管理', '/system/models': '模型配置', '/system/prompts': 'Prompt 模板',
-  '/tickets': '工单中心', '/tickets/qc': '质检统计', '/ticket/mine': '我的工单'
+  '/tickets': '工单中心', '/tickets/qc': '质检统计', '/tickets/live': '坐席实时会话', '/ticket/mine': '我的工单'
 }
 router.afterEach(to => {
   document.title = (TITLES[to.path] ? TITLES[to.path] + ' · ' : '') + 'HelpHub 智能客服'

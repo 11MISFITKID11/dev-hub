@@ -58,8 +58,15 @@
             <span v-for="q in suggestions" :key="q" class="sug-chip" @click="input = q">{{ q }}</span>
           </div>
         </div>
+        <!-- 人工接管横幅 -->
+        <div v-if="cur && cur.takeoverStatus" class="tk-banner">
+          <span class="tk-banner-dot" :class="{ on: cur.takeoverStatus === 'ACTIVE' }"></span>
+          {{ cur.takeoverStatus === 'PENDING' ? '已申请人工跟进，等待坐席接入…（AI 暂停自动回复）' : `人工坐席接管中（${cur.handler}）· 您的消息将直达坐席` }}
+        </div>
         <div v-for="(m, i) in msgs" :key="i" :style="{ display:'flex', justifyContent: m.role === 'USER' ? 'flex-end' : 'flex-start', marginBottom:'14px' }">
-          <div :class="m.role === 'USER' ? 'b-user' : 'b-ai'">
+          <div v-if="m.role === 'SYSTEM'" class="sys-line">{{ m.content }}</div>
+          <div v-else :class="m.role === 'USER' ? 'b-user' : 'b-ai'">
+            <div v-if="m.role === 'AGENT'" class="agent-badge">🎧 人工坐席</div>
             <div v-if="m.role === 'USER'" style="white-space:pre-wrap">{{ m.content }}</div>
             <template v-else>
               <div v-if="streaming && m.stage && !m.content" class="stage-line">
@@ -114,7 +121,7 @@
 
 <script setup>
 defineOptions({ name: 'ChatPage' })
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -181,22 +188,11 @@ async function delConv(c) {
 }
 function newConv() { cur.value = null; msgs.value = [] }
 async function openConv(c) {
+  stopPoll()
   cur.value = c
   const ms = await api.get(`/v1/conversations/${c.id}/messages`)
-  let lastQ = ''
-  msgs.value = (ms || []).map(m => {
-    // 兜底剥离历史脏数据里的 __META__ 协议帧（新数据后端已不落 META）
-    const content = (m.content || '').replace(/^__META__\{[\s\S]*?\}(?=\S|$)/, '').trim()
-    const item = {
-      role: m.role, content,
-      html: m.role === 'ASSISTANT' ? render(content) : '',
-      messageId: m.id, feedback: m.feedback ?? null,
-      refused: m.role === 'ASSISTANT' && !!m.refused,
-      question: m.role === 'ASSISTANT' ? lastQ : ''
-    }
-    if (m.role === 'USER') lastQ = content
-    return item
-  })
+  applyMessages(ms || [])
+  if (c.takeoverStatus) startPoll()
 }
 function render(text) {
   let fences = (text.match(/```/g) || []).length
@@ -233,8 +229,9 @@ async function submitTicket() {
       conversationId: cur.value && cur.value.id,
       messageId: tkFrom.value && tkFrom.value.messageId
     })
-    ElMessage.success('已转工单，可在「我的工单」跟进处理进度')
+    ElMessage.success('已转工单，坐席接入后可在本对话直接沟通')
     tkDlg.value = false
+    if (cur.value && cur.value.id) { cur.value.takeoverStatus = 'PENDING'; startPoll() }
   } finally { tkCreating.value = false }
 }
 function scrollBottom() { nextTick(() => { if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight }) }
@@ -280,6 +277,12 @@ async function send() {
         if (data.startsWith('__META__')) {
           const meta = JSON.parse(data.slice(8))
           if (meta.stage) { aiMsg.stage = meta.text || ''; scrollBottom(); continue }
+          if (meta.takeover) {
+            cur.value.takeoverStatus = meta.takeoverStatus
+            cur.value.handler = meta.handler
+            startPoll()
+            loadConvs()
+          }
           if (meta.conversationId && !cur.value) {
             cur.value = { id: meta.conversationId, title: q }
             loadConvs()
@@ -315,6 +318,46 @@ async function send() {
 function abort() { if (ctrl.value) ctrl.value.abort() }
 
 onMounted(() => { loadConvs(); loadModels() })
+onUnmounted(() => stopPoll())
+
+/* ---- 人工接管：轮询接收坐席回复 ---- */
+let pollTimer = null, lastMsgCount = -1
+function startPoll() {
+  stopPoll()
+  pollTimer = setInterval(async () => {
+    if (!cur.value || !cur.value.id || !cur.value.takeoverStatus) { stopPoll(); return }
+    try {
+      const list = await api.get('/v1/conversations')
+      const meRow = (list || []).find(c => c.id === cur.value.id)
+      if (meRow) {
+        cur.value.takeoverStatus = meRow.takeoverStatus || null
+        cur.value.handler = meRow.handler
+        if (!meRow.takeoverStatus) { stopPoll(); loadConvs() }
+      }
+      const ms = await api.get(`/v1/conversations/${cur.value.id}/messages`)
+      if ((ms || []).length !== lastMsgCount) applyMessages(ms || [])
+    } catch (e) { /* 轮询失败忽略，下轮重试 */ }
+  }, 3000)
+}
+function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
+
+function applyMessages(ms) {
+  lastMsgCount = ms.length
+  let lastQ = ''
+  msgs.value = ms.map(m => {
+    const content = (m.content || '').replace(/^__META__\{[\s\S]*?\}(?=\S|$)/, '').trim()
+    const item = {
+      role: m.role, content,
+      html: (m.role === 'ASSISTANT' || m.role === 'AGENT') ? render(content) : '',
+      messageId: m.id, feedback: m.feedback ?? null,
+      refused: m.role === 'ASSISTANT' && !!m.refused,
+      question: m.role === 'ASSISTANT' ? lastQ : ''
+    }
+    if (m.role === 'USER') lastQ = content
+    return item
+  })
+  scrollBottom()
+}
 </script>
 
 <style scoped>
@@ -431,4 +474,14 @@ html.dark .b-ai { background: rgba(36, 36, 40, 0.66); }
 .stage-line { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--el-text-color-secondary); padding:2px 0; }
 .stage-dot { width:7px; height:7px; border-radius:50%; background:var(--el-color-primary); animation:stagePulse 1.1s ease-in-out infinite; }
 @keyframes stagePulse { 0%,100% { opacity:.25; transform:scale(.8); } 50% { opacity:1; transform:scale(1.15); } }
+/* 人工接管横幅与坐席消息标识 */
+.tk-banner { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--el-color-warning);
+  background:var(--el-color-warning-light-9); border:1px solid var(--el-color-warning-light-7);
+  border-radius:10px; padding:7px 12px; margin-bottom:12px; }
+.tk-banner-dot { width:7px; height:7px; border-radius:50%; background:var(--el-color-warning); animation:stagePulse 1.1s ease-in-out infinite; }
+.tk-banner-dot.on { background:var(--el-color-success); }
+.agent-badge { display:inline-block; font-size:11px; color:#fff; background:var(--el-color-success);
+  border-radius:6px 6px 6px 2px; padding:1px 8px; margin-bottom:6px; }
+.sys-line { width:100%; text-align:center; font-size:12px; color:var(--el-text-color-secondary);
+  background:var(--el-fill-color-light); border-radius:8px; padding:5px 10px; }
 </style>

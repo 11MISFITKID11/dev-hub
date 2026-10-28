@@ -13,6 +13,7 @@ public enum MessageRole {
     SYSTEM("system", "系统提示"),
     USER("user", "用户消息"),
     ASSISTANT("assistant", "助手回复"),
+    AGENT("agent", "人工坐席回复"),
     TOOL("tool", "工具调用结果");
 
     private final String code;

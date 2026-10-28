@@ -40,13 +40,15 @@ public class TicketService {
     private final Executor qcExecutor;
     private final SlaService slaService;
     private final TicketAssignService assignService;
+    private final com.devhub.module.ai.service.agent.ConversationTakeoverService takeoverService;
     private final TicketTagMapper tagMapper;
 
     public TicketService(SupportTicketMapper ticketMapper, SupportTicketReplyMapper replyMapper,
                          TicketAiService ticketAi, NotificationService notify,
                          @Qualifier("ticketQcExecutor") Executor qcExecutor,
                          SlaService slaService, TicketAssignService assignService,
-                         TicketTagMapper tagMapper) {
+                         TicketTagMapper tagMapper,
+                         com.devhub.module.ai.service.agent.ConversationTakeoverService takeoverService) {
         this.ticketMapper = ticketMapper;
         this.replyMapper = replyMapper;
         this.ticketAi = ticketAi;
@@ -54,6 +56,7 @@ public class TicketService {
         this.qcExecutor = qcExecutor;
         this.slaService = slaService;
         this.assignService = assignService;
+        this.takeoverService = takeoverService;
         this.tagMapper = tagMapper;
     }
 
@@ -89,6 +92,14 @@ public class TicketService {
         SupportTicket fresh = ticketMapper.selectById(t.getId());
         slaService.armClock(fresh, false);
         assignService.autoAssign(fresh);
+        // 坐席实时接管联动：会话随工单进入"待接管"，AI 停止自动应答等坐席接入
+        if (conversationId != null && !conversationId.isBlank()) {
+            try {
+                takeoverService.markPending(conversationId, fresh.getId());
+            } catch (Exception e) {
+                log.warn("会话转人工联动失败（不影响建单）: {}", e.getMessage());
+            }
+        }
         return fresh;
     }
 

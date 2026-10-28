@@ -60,7 +60,8 @@ class TicketServiceTest {
     void setUp() {
         // 质检执行器用同步直跑，便于断言"结单即质检"
         service = new TicketService(ticketMapper, replyMapper, ticketAi, notify, Runnable::run,
-                slaService, assignService, tagMapper);
+                slaService, assignService, tagMapper,
+                org.mockito.Mockito.mock(com.devhub.module.ai.service.agent.ConversationTakeoverService.class));
     }
 
     private SupportTicket ticket(long id, String username, String status) {

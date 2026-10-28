@@ -57,6 +57,7 @@ public class AgentOrchestrator {
     private final PromptTemplateService promptTemplates;
     private final TraceService traceService;
     private final ConversationMapper conversationMapper;
+    private final ConversationTakeoverService takeoverService;
     private final MessageMapper messageMapper;
     private final com.devhub.module.ai.service.rag.CitationEnforcer citationEnforcer;
     private final com.devhub.module.ai.service.rag.FaithfulnessVerifier faithfulnessVerifier;
@@ -108,6 +109,20 @@ public class AgentOrchestrator {
                         .build();
             }
 
+            // 人工接管态：AI 不作答——客户消息直达坐席
+            Conversation conv = takeoverService.get(conversationId);
+            if (conv != null && conv.getTakeoverStatus() != null) {
+                takeoverService.customerMessage(conversationId, request.getMessage());
+                traceService.endTrace(traceId);
+                return ChatResponse.builder()
+                        .reply(ConversationTakeoverService.STATUS_PENDING.equals(conv.getTakeoverStatus())
+                                ? "已为您转接人工坐席，坐席接入后可继续对话。"
+                                : "")
+                        .conversationId(conversationId)
+                        .traceId(traceId)
+                        .build();
+            }
+
             memoryManager.saveUserMessage(conversationId, request.getMessage());
 
             traceService.addSpan(traceId, "intent_recognition", Map.of("message", request.getMessage()));
@@ -139,6 +154,9 @@ public class AgentOrchestrator {
                     var cached = semanticAnswerCache.lookup(queryVector, request.getMessage(), multiRetriever.dataScope());
                     if (cached != null) {
                         List<ChatResponse.SourceDocument> cachedSources = parseSources(cached.sourcesJson());
+                        // 命中也落库为新消息（与流式链路一致）：会话历史可见且反馈闭环不断链
+                        persistConversation(conversationId, request.getMessage(), cached.answer(),
+                                cached.model(), 0, java.util.UUID.randomUUID().toString().replace("-", ""));
                         ChatResponse response = ChatResponse.builder()
                                 .reply(cached.answer())
                                 .sources(cachedSources)
@@ -178,6 +196,7 @@ public class AgentOrchestrator {
             String forceModel = request.getModelOptions() != null
                     ? request.getModelOptions().getModel() : null;
 
+            request.setConversationId(conversationId);
             ChatResponse response = dispatchToAgent(mode, request, ragContext, historyContext,
                     traceId, forceModel, ragMissed, simpleChat);
             response.setConversationId(conversationId);
@@ -337,6 +356,26 @@ public class AgentOrchestrator {
         return Flux.<String>create(sink -> {
             try {
                 stage(sink, "understanding", "正在理解问题…");
+                // 人工接管态：AI 不作答，客户消息直达坐席（横幅+轮询由前端承接）
+                Conversation conv = takeoverService.get(conversationId);
+                if (conv != null && conv.getTakeoverStatus() != null) {
+                    takeoverService.customerMessage(conversationId, request.getMessage());
+                    try {
+                        Map<String, Object> tk = new LinkedHashMap<>();
+                        tk.put("conversationId", conversationId);
+                        tk.put("takeover", true);
+                        tk.put("takeoverStatus", conv.getTakeoverStatus());
+                        tk.put("handler", conv.getHandler());
+                        sink.next("__META__" + objectMapper.writeValueAsString(tk));
+                    } catch (Exception ignored) { }
+                    if (ConversationTakeoverService.STATUS_PENDING.equals(conv.getTakeoverStatus())) {
+                        sink.next("已为您转接人工坐席，坐席接入后可继续在本对话交流。");
+                    }
+                    traceService.endTrace(traceId);
+                    sink.next("[DONE]");
+                    sink.complete();
+                    return;
+                }
                 // 闲聊短路：问候类跳过整条检索管线（改写/重排各一次 LLM 往返，闲聊用不到），直接生成
                 IntentRecognizer.IntentResult ruleIntent = intentRecognizer.recognizeByRule(request.getMessage());
                 boolean simpleChat = ruleIntent != null && "SIMPLE_CHAT".equals(ruleIntent.getIntentType());
@@ -404,9 +443,15 @@ public class AgentOrchestrator {
                         String agentContext = fullContext + "\n\n[客服场景指引] 查询订单/物流/签收进度必须用 query_order（不要凭参考资料猜测）；"
                                 + "客户明确要求报修/创建工单/投诉，或故障无法当场指导解决时，调用 create_ticket 创建工单（content 只写问题事实，不写追问），"
                                 + "并在最终回答中告知工单号、下一步安排，以及需要客户补充的信息（如 SN 码、联系方式）。";
-                        ReActAgent.ReActResult ar = reActAgent.execute(request.getMessage(), agentContext,
+                        com.devhub.module.ai.service.tool.ConversationContextHolder.set(conversationId);
+                        ReActAgent.ReActResult ar;
+                        try {
+                            ar = reActAgent.execute(request.getMessage(), agentContext,
                                 AGENT_TOOLS, traceId, fm,
                                 toolName -> stage(sink, "tool", "正在调用" + toolCnName(toolName) + "…"));
+                        } finally {
+                            com.devhub.module.ai.service.tool.ConversationContextHolder.clear();
+                        }
                         if (!ar.getUsedTools().isEmpty()) {
                             steps.addAll(ar.getThinkingSteps());
                             String agentMsgId = java.util.UUID.randomUUID().toString().replace("-", "");
@@ -677,8 +722,14 @@ public class AgentOrchestrator {
         String mergedContext = joinContext(ragContext, historyContext);
         return switch (mode) {
             case REACT -> {
-                ReActAgent.ReActResult result = reActAgent.execute(
+                com.devhub.module.ai.service.tool.ConversationContextHolder.set(request.getConversationId());
+                ReActAgent.ReActResult result;
+                try {
+                    result = reActAgent.execute(
                         request.getMessage(), mergedContext, request.getTools(), traceId, forceModel);
+                } finally {
+                    com.devhub.module.ai.service.tool.ConversationContextHolder.clear();
+                }
                 yield ChatResponse.builder()
                         .reply(result.getFinalAnswer())
                         .thinkingSteps(result.getThinkingSteps())
